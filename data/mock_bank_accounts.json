@@ -1,0 +1,127 @@
+{
+  "bank_info": {
+    "bank_name": "メガバンク日本銀行 (Mega Bank Japan)",
+    "bank_code": "0001",
+    "system_status": "ONLINE",
+    "fisc_compliance_mode": true
+  },
+  "customers": [
+    {
+      "customer_id": "CUST-1001",
+      "name_kanji": "山田 太郎",
+      "name_katakana": "ヤマダ タロウ",
+      "branch_code": "001",
+      "branch_name": "本店営業部",
+      "account_number": "1234567",
+      "customer_tier": "GOLD",
+      "accounts": [
+        {
+          "account_type": "普通預金",
+          "account_type_code": "SAVINGS",
+          "balance": 1850000,
+          "currency": "JPY",
+          "interest_rate": "0.02%"
+        },
+        {
+          "account_type": "定期預金",
+          "account_type_code": "TIME_DEPOSIT",
+          "balance": 5000000,
+          "currency": "JPY",
+          "maturity_date": "2027-03-31",
+          "interest_rate": "0.25%"
+        },
+        {
+          "account_type": "外貨預金 (USD)",
+          "account_type_code": "FOREIGN_USD",
+          "balance": 12500.00,
+          "currency": "USD",
+          "interest_rate": "4.50%"
+        }
+      ],
+      "recent_transactions": [
+        {
+          "transaction_id": "TXN-90812",
+          "date": "2026-08-01",
+          "type": "振込入金",
+          "amount": 350000,
+          "currency": "JPY",
+          "description": "給与振込 カブシキガイシャABC",
+          "balance_after": 1850000
+        },
+        {
+          "transaction_id": "TXN-90745",
+          "date": "2026-07-28",
+          "type": "カード決済",
+          "amount": -15400,
+          "currency": "JPY",
+          "description": "デビット決済 (イオンスーパー)",
+          "balance_after": 1500000
+        },
+        {
+          "transaction_id": "TXN-90620",
+          "date": "2026-07-25",
+          "type": "振込出金",
+          "amount": -88000,
+          "currency": "JPY",
+          "description": "フリコミ サトウ ハナコ",
+          "balance_after": 1515400
+        },
+        {
+          "transaction_id": "TXN-90511",
+          "date": "2026-07-15",
+          "type": "ATM出金",
+          "amount": -30000,
+          "currency": "JPY",
+          "description": "セブン銀行ATM出金",
+          "balance_after": 1603400
+        }
+      ]
+    },
+    {
+      "customer_id": "CUST-1002",
+      "name_kanji": "佐藤 花子",
+      "name_katakana": "サトウ ハナコ",
+      "branch_code": "002",
+      "branch_name": "丸の内支店",
+      "account_number": "7654321",
+      "customer_tier": "PLATINUM",
+      "accounts": [
+        {
+          "account_type": "普通預金",
+          "account_type_code": "SAVINGS",
+          "balance": 4200000,
+          "currency": "JPY",
+          "interest_rate": "0.02%"
+        },
+        {
+          "account_type": "定期預金",
+          "account_type_code": "TIME_DEPOSIT",
+          "balance": 10000000,
+          "currency": "JPY",
+          "maturity_date": "2028-09-30",
+          "interest_rate": "0.30%"
+        }
+      ],
+      "recent_transactions": [
+        {
+          "transaction_id": "TXN-88102",
+          "date": "2026-08-03",
+          "type": "振込入金",
+          "amount": 88000,
+          "currency": "JPY",
+          "description": "フリコミ ヤマダ タロウ",
+          "balance_after": 4200000
+        },
+        {
+          "transaction_id": "TXN-88011",
+          "date": "2026-08-02",
+          "type": "配当金入金",
+          "amount": 45000,
+          "currency": "JPY",
+          "description": "ハイトウキン トヨタジドウシャ",
+          "balance_after": 4112000
+        }
+      ]
+    }
+  ]
+}
