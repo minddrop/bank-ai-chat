@@ -3,27 +3,39 @@
     "bank_name": "メガバンク日本銀行 (Mega Bank Japan)",
     "bank_code": "0001",
     "system_status": "ONLINE",
-    "fisc_compliance_mode": true
+    "fisc_compliance_mode": true,
+    "security_standards": "FISC 2026 Ready / APPI Compliant"
   },
   "customers": [
     {
       "customer_id": "CUST-1001",
       "name_kanji": "山田 太郎",
       "name_katakana": "ヤマダ タロウ",
+      "birth_date": "1985-04-12",
       "branch_code": "001",
       "branch_name": "本店営業部",
       "account_number": "1234567",
-      "customer_tier": "GOLD",
+      "customer_tier": "SUPER_VIP",
+      "happy_program_stage": "スーパーVIP (他行振込手数料3回無料 / ATM7回無料)",
+      "direct_banking_status": "ACTIVE",
+      "security_auth": {
+        "security_card_registered": true,
+        "one_time_key_enabled": true,
+        "biometric_auth_registered": true,
+        "last_password_change": "2026-05-10"
+      },
       "accounts": [
         {
+          "account_id": "ACC-1001-SAV",
           "account_type": "普通預金",
           "account_type_code": "SAVINGS",
-          "balance": 1850000,
+          "balance": 2450000,
           "currency": "JPY",
           "interest_rate": "0.02%"
         },
         {
-          "account_type": "定期預金",
+          "account_id": "ACC-1001-TIME",
+          "account_type": "定期預金 (1年物)",
           "account_type_code": "TIME_DEPOSIT",
           "balance": 5000000,
           "currency": "JPY",
@@ -31,9 +43,10 @@
           "interest_rate": "0.25%"
         },
         {
+          "account_id": "ACC-1001-USD",
           "account_type": "外貨預金 (USD)",
           "account_type_code": "FOREIGN_USD",
-          "balance": 12500.00,
+          "balance": 18500.00,
           "currency": "USD",
           "interest_rate": "4.50%"
         }
@@ -43,10 +56,10 @@
           "transaction_id": "TXN-90812",
           "date": "2026-08-01",
           "type": "振込入金",
-          "amount": 350000,
+          "amount": 420000,
           "currency": "JPY",
           "description": "給与振込 カブシキガイシャABC",
-          "balance_after": 1850000
+          "balance_after": 2450000
         },
         {
           "transaction_id": "TXN-90745",
@@ -55,7 +68,7 @@
           "amount": -15400,
           "currency": "JPY",
           "description": "デビット決済 (イオンスーパー)",
-          "balance_after": 1500000
+          "balance_after": 2030000
         },
         {
           "transaction_id": "TXN-90620",
@@ -64,16 +77,25 @@
           "amount": -88000,
           "currency": "JPY",
           "description": "フリコミ サトウ ハナコ",
-          "balance_after": 1515400
+          "balance_after": 2045400
         },
         {
           "transaction_id": "TXN-90511",
           "date": "2026-07-15",
+          "type": "口座振替",
+          "amount": -65000,
+          "currency": "JPY",
+          "description": "住宅ローン月次返済",
+          "balance_after": 2133400
+        },
+        {
+          "transaction_id": "TXN-90400",
+          "date": "2026-07-10",
           "type": "ATM出金",
           "amount": -30000,
           "currency": "JPY",
           "description": "セブン銀行ATM出金",
-          "balance_after": 1603400
+          "balance_after": 2198400
         }
       ]
     },
@@ -81,20 +103,31 @@
       "customer_id": "CUST-1002",
       "name_kanji": "佐藤 花子",
       "name_katakana": "サトウ ハナコ",
+      "birth_date": "1991-09-24",
       "branch_code": "002",
       "branch_name": "丸の内支店",
       "account_number": "7654321",
-      "customer_tier": "PLATINUM",
+      "customer_tier": "VIP",
+      "happy_program_stage": "VIP (他行振込手数料2回無料 / ATM5回無料)",
+      "direct_banking_status": "ACTIVE",
+      "security_auth": {
+        "security_card_registered": true,
+        "one_time_key_enabled": true,
+        "biometric_auth_registered": false,
+        "last_password_change": "2026-06-01"
+      },
       "accounts": [
         {
+          "account_id": "ACC-1002-SAV",
           "account_type": "普通預金",
           "account_type_code": "SAVINGS",
-          "balance": 4200000,
+          "balance": 4820000,
           "currency": "JPY",
           "interest_rate": "0.02%"
         },
         {
-          "account_type": "定期預金",
+          "account_id": "ACC-1002-TIME",
+          "account_type": "定期預金 (2年物)",
           "account_type_code": "TIME_DEPOSIT",
           "balance": 10000000,
           "currency": "JPY",
@@ -110,7 +143,7 @@
           "amount": 88000,
           "currency": "JPY",
           "description": "フリコミ ヤマダ タロウ",
-          "balance_after": 4200000
+          "balance_after": 4820000
         },
         {
           "transaction_id": "TXN-88011",
@@ -119,7 +152,111 @@
           "amount": 45000,
           "currency": "JPY",
           "description": "ハイトウキン トヨタジドウシャ",
-          "balance_after": 4112000
+          "balance_after": 4732000
+        },
+        {
+          "transaction_id": "TXN-87900",
+          "date": "2026-07-20",
+          "type": "口座振替",
+          "amount": -14200,
+          "currency": "JPY",
+          "description": "東京電力エナジーパートナー",
+          "balance_after": 4687000
+        }
+      ]
+    },
+    {
+      "customer_id": "CUST-1003",
+      "name_kanji": "鈴木 一郎",
+      "name_katakana": "スズキ イチロウ",
+      "birth_date": "1978-11-05",
+      "branch_code": "003",
+      "branch_name": "新宿支店",
+      "account_number": "9876543",
+      "customer_tier": "PREMIUM",
+      "happy_program_stage": "プレミアム (他行振込手数料1回無料)",
+      "direct_banking_status": "ACTIVE",
+      "security_auth": {
+        "security_card_registered": true,
+        "one_time_key_enabled": false,
+        "biometric_auth_registered": false,
+        "last_password_change": "2026-01-15"
+      },
+      "accounts": [
+        {
+          "account_id": "ACC-1003-SAV",
+          "account_type": "普通預金",
+          "account_type_code": "SAVINGS",
+          "balance": 1120000,
+          "currency": "JPY",
+          "interest_rate": "0.02%"
+        },
+        {
+          "account_id": "ACC-1003-LOAN",
+          "account_type": "カードローン (スーパーローン)",
+          "account_type_code": "CARD_LOAN",
+          "balance": -350000,
+          "currency": "JPY",
+          "interest_rate": "9.60%"
+        }
+      ],
+      "recent_transactions": [
+        {
+          "transaction_id": "TXN-77100",
+          "date": "2026-08-01",
+          "type": "給与振込",
+          "amount": 290000,
+          "currency": "JPY",
+          "description": "キヨウヨ サンエイショウジ",
+          "balance_after": 1120000
+        },
+        {
+          "transaction_id": "TXN-77050",
+          "date": "2026-07-27",
+          "type": "カードローン返済",
+          "amount": -20000,
+          "currency": "JPY",
+          "description": "カードローン月次自動返済",
+          "balance_after": 830000
+        }
+      ]
+    },
+    {
+      "customer_id": "CUST-1004",
+      "name_kanji": "田中 美咲",
+      "name_katakana": "タナカ ミサキ",
+      "birth_date": "1996-03-30",
+      "branch_code": "004",
+      "branch_name": "渋谷支店",
+      "account_number": "3344556",
+      "customer_tier": "REGULAR",
+      "happy_program_stage": "ベーシック",
+      "direct_banking_status": "ACTIVE",
+      "security_auth": {
+        "security_card_registered": true,
+        "one_time_key_enabled": true,
+        "biometric_auth_registered": true,
+        "last_password_change": "2026-07-01"
+      },
+      "accounts": [
+        {
+          "account_id": "ACC-1004-SAV",
+          "account_type": "普通預金",
+          "account_type_code": "SAVINGS",
+          "balance": 650000,
+          "currency": "JPY",
+          "interest_rate": "0.02%"
+        }
+      ],
+      "recent_transactions": [
+        {
+          "transaction_id": "TXN-66010",
+          "date": "2026-08-02",
+          "type": "デビット決済",
+          "amount": -8500,
+          "currency": "JPY",
+          "description": "楽天デビット決済 (ユニクロ)",
+          "balance_after": 650000
         }
       ]
     }
