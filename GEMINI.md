@@ -48,84 +48,34 @@ Architectural and regulatory decisions MUST be formally documented as **Architec
 
 ### ADR Workflow & Standards:
 1. **Creation**: Whenever a key architectural, security, data schema, model selection, or compliance decision is made, create a new Markdown file in `docs/adr/NNNN-<short-description>.md`.
-2. **Format**: Follow the standard ADR structure:
-   - **Title**: `# ADR NNNN: [Title]`
-   - **Status**: `Accepted` | `Proposed` | `Deprecated`
-   - **Date**: `YYYY-MM-DD`
-   - **Context & Problem Statement**: Detailed background and regulatory context.
-   - **Decision Drivers**: Key constraints (FISC, APPI, cost, latency).
-   - **Considered Options**: Evaluated alternatives and rationale for rejection.
-   - **Decision Outcome**: Selected solution and technical details.
-   - **Consequences**: Positive and negative trade-offs.
-3. **Commit**: Commit new ADRs to Git immediately alongside corresponding technical changes.
-
-### Current ADR Registry:
-- [0001-japanese-banking-compliance-and-control-planes.md](docs/adr/0001-japanese-banking-compliance-and-control-planes.md): APPI/FSA/FISC Compliance & In-VPC Dual Control Planes.
-- [0002-aws-bedrock-nova-lite-model-selection.md](docs/adr/0002-aws-bedrock-nova-lite-model-selection.md): Model Selection (Amazon Nova Lite in `ap-northeast-1`).
-- [0003-rakuten-bank-faq-rag-pipeline.md](docs/adr/0003-rakuten-bank-faq-rag-pipeline.md): Full Rakuten Bank FAQ Ingestion & RAG Pipeline.
-- [0004-synthetic-japanese-account-schema.md](docs/adr/0004-synthetic-japanese-account-schema.md): Realistic Synthetic Japanese Bank Account Data Schema.
-- [0005-hybrid-cloud-and-aws-poc-architecture.md](docs/adr/0005-hybrid-cloud-and-aws-poc-architecture.md): Target Hybrid On-Prem + AWS Production Cloud Architecture.
-- [0006-cicd-and-production-cost-estimation.md](docs/adr/0006-cicd-and-production-cost-estimation.md): Enterprise CI/CD Pipeline & Production AWS Cost Estimation.
+2. **Format**: Standard ADR format (`Title`, `Status`, `Date`, `Context & Problem Statement`, `Decision Drivers`, `Considered Options`, `Decision Outcome`, `Consequences`).
+3. **Registry**: Refer to `docs/adr/` directory for the full historical registry of accepted architectural decision records.
 
 ---
 
 ## 4. Git Commit Guidelines & Conventions
 
-Frequents, atomic, and clear Git commits are mandatory for this repository.
+Frequent, atomic, and clear Git commits are mandatory for this repository.
 
 ### Commit Policy:
 1. **Regular Milestone Commits**: Make a commit after completing every functional module, dataset update, control plane enhancement, or documentation file.
-2. **Conventional Commit Syntax**: Use standardized conventional commit prefixes:
+2. **Conventional Commit Syntax**:
    - `feat(...)`: New system features, control plane logic, or API endpoints.
    - `docs(...)`: Requirement updates, ADR additions, or architectural diagrams.
    - `fix(...)`: Bug fixes, security patches, or regex adjustments.
    - `test(...)`: Automated unit tests or guardrail stress test vectors.
    - `chore(...)`: Configuration updates, dependencies, or `.gitignore` changes.
-3. **Commit Message Format**:
-   ```
-   <type>(<scope>): <short summary in imperative mood>
-
-   [optional detailed description of changes, regulatory justification, or test results]
-   ```
 
 ---
 
-## 5. System Directory Layout
+## 5. System Directory Layout Overview
 
 ```
 bank-ai-chat/
-├── GEMINI.md                         # Overarching project concept, ADR policy, & guidelines
-├── README.md                         # Repository overview & quickstart guide
-├── .gitignore                        # Git exclusions (caches, runtime logs)
-├── data/
-│   ├── mock_bank_accounts.json       # Production synthetic Japanese account database
-│   └── rakuten_faq.json              # Ingested Rakuten Bank FAQ knowledge base
-├── docs/
-│   ├── requirements_definition.md    # Comprehensive Enterprise Requirements & Schemas
-│   ├── aws_architecture.md           # AWS Production Topology & Hybrid Design
-│   ├── cicd_pipeline.md              # CI/CD Automated Testing & Deployment Strategy
-│   ├── cost_estimation.md            # AWS Production Cost Estimation & Sizing
-│   └── adr/                          # Architectural Decision Records (0001 - 0006+)
-├── scripts/
-│   └── crawl_full_rakuten_faq.py     # FAQ Knowledge Base ingestion pipeline script
-├── src/
-│   ├── backend/
-│   │   ├── app.py                    # FastAPI Backend Application
-│   │   └── server.py                 # Production Web & REST API Server
-│   ├── control_plane/
-│   │   ├── input_guardrail.py        # Input PII Scrubbing & Prompt Injection Filter
-│   │   ├── output_guardrail.py       # Output Grounding Check & Disclaimer Injector
-│   │   └── audit_logger.py           # FISC-Compliant Audit Logger
-│   ├── llm/
-│   │   └── bedrock_nova.py           # Amazon Bedrock (Nova Lite) Interface Client
-│   ├── rag/
-│   │   └── vector_store.py           # Vector Index & Cosine RAG Search Engine
-│   └── frontend/
-│       ├── index.html                # Bank Customer AI Portal UI Structure
-│       ├── styles.css                # Premium Dark/Navy Bank UI Styling
-│       └── app.js                    # Web Frontend Logic & Live Control Plane Monitor
-└── tests/
-    ├── test_account_data.py          # Account Schema Unit Tests
-    ├── test_guardrails.py            # Input/Output Guardrail Unit Tests
-    └── test_rag.py                   # RAG Search Unit Tests
+├── GEMINI.md                         # Overarching project concept, rules, & guidelines
+├── data/                             # Production synthetic bank accounts & Rakuten FAQ JSON
+├── docs/                             # Requirements, AWS design, CI/CD, Costs, & adr/
+├── scripts/                          # FAQ ingestion & data tools
+├── src/                              # backend, control_plane, llm, rag, frontend
+└── tests/                            # Automated unit tests for guardrails, RAG, and schemas
 ```
