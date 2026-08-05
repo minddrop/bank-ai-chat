@@ -184,14 +184,33 @@ def process_article_task(item):
     }
 
 
-def save_incremental_json(faq_records: list):
-    """Write records incrementally to data/rakuten_faq.json."""
+def save_incremental_json(faq_records: list, health_stats: dict = None, total_duration: float = 0.0):
+    """Write records incrementally to data/rakuten_faq.json with execution metadata."""
     try:
+        stats = health_stats or {"categories_scanned": 19, "keywords_scanned": 35, "success": len(faq_records), "failed": 0}
+        metadata = {
+            "last_updated": time.strftime("%Y-%m-%dT%H:%M:%S+09:00"),
+            "crawler_version": "2.0.0",
+            "source_portal": "https://help-personal.rakuten-bank.net",
+            "execution_time_seconds": round(total_duration, 2),
+            "categories_scanned": stats.get("categories_scanned", 19),
+            "keywords_scanned": stats.get("keywords_scanned", 35),
+            "total_articles_discovered": len(faq_records),
+            "successfully_extracted": stats.get("success", len(faq_records)),
+            "failed_articles": stats.get("failed", 0),
+            "freshness_status": "FRESH"
+        }
+        output_payload = {
+            "metadata": metadata,
+            "items": faq_records
+        }
         with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-            json.dump(faq_records, f, ensure_ascii=False, indent=2)
-        logger.info(f"[INCREMENTAL SAVE] Persisted {len(faq_records)} FAQ entries to disk ({OUTPUT_FILE})")
+            json.dump(output_payload, f, ensure_ascii=False, indent=2)
+        logger.info(f"[INCREMENTAL SAVE] Persisted {len(faq_records)} FAQ entries and metadata to disk ({OUTPUT_FILE})")
     except Exception as e:
         logger.error(f"[SAVE ERROR] Could not save records: {e}")
+
+
 
 def crawl_category_task(item):
     cat_name, cat_url = item
@@ -283,8 +302,9 @@ def crawl_full_rakuten_faq():
     if os.path.exists(OUTPUT_FILE):
         try:
             with open(OUTPUT_FILE, 'r', encoding='utf-8') as f:
-                existing = json.load(f)
-                faq_records = [item for item in existing if item.get('id', '').startswith('FAQ-RB-')]
+                existing_payload = json.load(f)
+                existing_items = existing_payload["items"] if isinstance(existing_payload, dict) and "items" in existing_payload else existing_payload
+                faq_records = [item for item in existing_items if isinstance(item, dict) and item.get('id', '').startswith('FAQ-RB-')]
                 logger.info(f"[SEED MERGE] Preserved {len(faq_records)} ground-truth seed FAQ entries.")
         except Exception as e:
             logger.warning(f"[SEED MERGE] Failed loading existing seed FAQs: {e}")
@@ -319,11 +339,12 @@ def crawl_full_rakuten_faq():
 
             # Save incrementally every 5 records
             if len(faq_records) % 5 == 0 and len(faq_records) > 0:
-                save_incremental_json(faq_records)
+                save_incremental_json(faq_records, health_stats)
 
-    # Final Save
-    save_incremental_json(faq_records)
     total_duration = time.time() - start_time
+    # Final Save with full health stats and duration
+    save_incremental_json(faq_records, health_stats, total_duration)
+
 
     # Health Check Summary Report
     logger.info("\n" + "=" * 65)

@@ -20,10 +20,17 @@ class VectorStore:
         self.load_data()
 
     def load_data(self):
-        """Load FAQ items from JSON file."""
+        """Load FAQ items from JSON file with metadata support."""
         if os.path.exists(self.faq_path):
             with open(self.faq_path, 'r', encoding='utf-8') as f:
-                self.documents = json.load(f)
+                data = json.load(f)
+                if isinstance(data, dict) and "items" in data:
+                    self.documents = data["items"]
+                    self.metadata = data.get("metadata", {})
+                else:
+                    self.documents = data
+                    self.metadata = {}
+
 
     def _tokenize(self, text: str) -> List[str]:
         """Simple Japanese character & word n-gram tokenizer."""
