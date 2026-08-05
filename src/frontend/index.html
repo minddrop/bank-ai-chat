@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>メガバンク日本銀行 | AIカスタマーサポートアシスタント (POC)</title>
+  <title>メガバンク日本銀行 | 勘定系システム & AIアシスタント</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -17,23 +17,36 @@
         <div class="bank-symbol"></div>
         <div class="brand-titles">
           <h1>メガバンク日本銀行</h1>
-          <span class="sub-title">AI Customer Banking Portal (FISC & APPI Guarded)</span>
+          <span class="sub-title">Core Banking System & AI Customer Portal</span>
         </div>
       </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" id="tab-btn-chat" onclick="switchTab('chat')">
+          <span class="tab-icon">💬</span>
+          <span>AIチャットアシスタント</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-core" onclick="switchTab('core')">
+          <span class="tab-icon">🏦</span>
+          <span>勘定系口座管理システム (API)</span>
+        </button>
+      </nav>
+
       <div class="header-badges">
-        <span class="badge badge-tokyo">AWS ap-northeast-1 (Tokyo)</span>
-        <span class="badge badge-bedrock">Bedrock Amazon Nova Lite</span>
-        <span class="badge badge-fisc">FISC安全対策基準 適合</span>
+        <span class="badge badge-tokyo">AWS ap-northeast-1</span>
+        <span class="badge badge-bedrock">Amazon Nova Lite</span>
+        <span class="badge badge-fisc">FISC 適合</span>
       </div>
     </header>
 
-    <!-- Main Workspace -->
-    <main class="main-layout">
+    <!-- Main Workspace: Chat View -->
+    <main class="main-layout" id="view-chat-layout">
       <!-- Left Column: Customer Account Simulator -->
       <aside class="sidebar-panel account-panel">
         <div class="panel-header">
           <h2>口座シミュレーター (APPI 匿名化)</h2>
-          <select id="customer-select" class="customer-dropdown" onchange="onCustomerChange()">
+          <select id="customer-select" class="customer-dropdown" onchange="onCustomerChange(this.value)">
             <!-- Options dynamically populated -->
           </select>
         </div>
@@ -92,7 +105,7 @@
         </div>
 
         <form class="chat-input-area" onsubmit="handleChatSubmit(event)">
-          <input type="text" id="user-input" class="chat-input" placeholder="質問を入力してください（例：振込手数料について教えてください）..." autocomplete="off">
+          <input type="text" id="user-input" class="chat-input" placeholder="質問を入力してください（例：残高と直近の取引履歴を教えてください）..." autocomplete="off">
           <button type="submit" class="send-btn" id="send-btn">
             <span>送信</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
@@ -150,8 +163,85 @@
         </div>
       </aside>
     </main>
+
+    <!-- Core Banking System View -->
+    <main class="core-banking-view hidden" id="view-core-layout">
+      <!-- Customer Info & Balance Header -->
+      <div class="core-header-card">
+        <div class="core-header-top">
+          <div class="core-title-group">
+            <h2>勘定系 口座・取引明細管理Webシステム</h2>
+            <p>SQLite Core Bank DB (`data/bank_core.db`) / REST API 連携</p>
+          </div>
+          <div class="core-customer-selector">
+            <label for="core-customer-select">顧客切り替え:</label>
+            <select id="core-customer-select" class="customer-dropdown" onchange="onCustomerChange(this.value)">
+              <!-- Options populated -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Basic Customer Profile Cards -->
+        <div class="customer-profile-grid" id="core-customer-profile">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Account Balances Cards -->
+      <div class="core-section">
+        <div class="section-title-row">
+          <h3>現在残高一覧 (Account Balances)</h3>
+          <span class="api-tag">GET /api/core/customers/{id}/accounts</span>
+        </div>
+        <div class="balance-cards-grid" id="core-balance-cards">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Transaction History Table Section -->
+      <div class="core-section">
+        <div class="section-title-row">
+          <h3>入出金明細照会 (Transaction History)</h3>
+          <div class="search-filter-box">
+            <input type="text" id="txn-search-input" placeholder="明細・摘用で検索..." onkeyup="filterTransactions()">
+            <span class="api-tag">GET /api/core/customers/{id}/transactions</span>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="transaction-table">
+            <thead>
+              <tr>
+                <th>取引ID</th>
+                <th>日付</th>
+                <th>取引区分</th>
+                <th>摘要 (お振込人名/加盟店)</th>
+                <th>取引金額</th>
+                <th>差引残高</th>
+              </tr>
+            </thead>
+            <tbody id="core-txn-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AI Extraction API Demo Block -->
+      <div class="core-section">
+        <div class="section-title-row">
+          <h3>AIチャットボット向け アカウント情報抽出REST API レスポンス</h3>
+          <button class="btn-api-call" onclick="fetchAIExtractionPayload()">
+            <span>🔄 API呼出テスト (POST /api/core/extract-account-info)</span>
+          </button>
+        </div>
+        <div class="json-payload-container">
+          <pre id="api-extraction-output" class="json-code-block">"API呼び出しボタンをクリックすると、AIチャットが参照する口座データJSONが表示されます..."</pre>
+        </div>
+      </div>
+    </main>
   </div>
 
   <script src="app.js"></script>
 </body>
 </html>
+
