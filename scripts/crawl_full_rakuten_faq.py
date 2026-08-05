@@ -28,7 +28,9 @@ from html.parser import HTMLParser
 BASE_DOMAIN = "https://help-personal.rakuten-bank.net"
 PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 OUTPUT_FILE = os.path.join(PROJECT_ROOT, "data", "rakuten_faq.json")
-LOG_FILE = os.path.join(PROJECT_ROOT, "data", "crawler.log")
+TIMESTAMP = time.strftime("%Y%m%d_%H%M%S")
+LOG_FILE = os.path.join(PROJECT_ROOT, "data", f"crawler_{TIMESTAMP}.log")
+
 
 # Ensure output directory exists
 os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
