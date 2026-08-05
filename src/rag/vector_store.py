@@ -47,23 +47,31 @@ class VectorStore:
 
         scored_docs = []
         for doc in self.documents:
-            doc_text = f"{doc.get('category', '')} {doc.get('question', '')} {doc.get('answer', '')}"
-            doc_tokens = self._tokenize(doc_text)
+            q_tokens = self._tokenize(doc.get('question', ''))
+            cat_tokens = self._tokenize(doc.get('category', ''))
+            ans_tokens = self._tokenize(doc.get('answer', ''))
             
-            # Count term frequency overlap
-            doc_token_counts = {}
-            for t in doc_tokens:
-                doc_token_counts[t] = doc_token_counts.get(t, 0) + 1
-                
+            q_counts = {}
+            for t in q_tokens: q_counts[t] = q_counts.get(t, 0) + 1
+            cat_counts = {}
+            for t in cat_tokens: cat_counts[t] = cat_counts.get(t, 0) + 1
+            ans_counts = {}
+            for t in ans_tokens: ans_counts[t] = ans_counts.get(t, 0) + 1
+            
             score = 0
             for qt in query_tokens:
-                if qt in doc_token_counts:
-                    score += doc_token_counts[qt]
+                if qt in q_counts:
+                    score += q_counts[qt] * 4.0
+                if qt in cat_counts:
+                    score += cat_counts[qt] * 2.0
+                if qt in ans_counts:
+                    score += ans_counts[qt] * 0.5
 
-            # Normalize by document length
-            norm_score = score / max(1, math.sqrt(len(doc_tokens)))
+            total_tokens = len(q_tokens) * 4 + len(cat_tokens) * 2 + len(ans_tokens) * 0.5
+            norm_score = score / max(1, math.sqrt(total_tokens))
             
             scored_docs.append((norm_score, doc))
+
 
         # Sort descending by similarity score
         scored_docs.sort(key=lambda x: x[0], reverse=True)
