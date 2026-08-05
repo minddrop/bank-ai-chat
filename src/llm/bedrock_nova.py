@@ -46,10 +46,20 @@ class BedrockNovaLiteClient:
         # Build context prompt
         context_str = ""
         if account_context:
-            context_str += f"\n【お客様口座情報 (マスキング済)】\n顧客ID: {account_context.get('customer_id')}\n口座種別: 普通預金 (残高: {account_context.get('accounts', [{}])[0].get('balance', 0):,}円)\n"
+            context_str += f"\n【お客様口座情報 (マスキング済)】\n顧客ID: {account_context.get('customer_id')}\n名義: {account_context.get('name_kanji')} ({account_context.get('name_katakana')})\n"
+            acc_list = account_context.get('accounts', [])
+            for acc in acc_list:
+                curr = acc.get('currency', 'JPY')
+                bal = acc.get('balance', 0)
+                bal_str = f"{bal:,.2f} {curr}" if curr != "JPY" else f"{bal:,} 円"
+                context_str += f"- {acc.get('account_type')}: 残高 {bal_str}\n"
+
             if account_context.get('recent_transactions'):
-                txns = account_context['recent_transactions'][:2]
-                context_str += f"直近取引: {txns[0].get('date')} {txns[0].get('type')} {txns[0].get('amount'):,}円 ({txns[0].get('description')})\n"
+                context_str += "直近取引明細:\n"
+                for tx in account_context['recent_transactions'][:4]:
+                    amt_val = tx.get('amount', 0)
+                    amt_str = f"{amt_val:,}円" if tx.get('currency', 'JPY') == "JPY" else f"{amt_val} {tx.get('currency')}"
+                    context_str += f"  - {tx.get('date')} [{tx.get('type')}] {amt_str} ({tx.get('description')}) -> 差引残高: {tx.get('balance_after', 0):,}円\n"
 
         if rag_contexts:
             context_str += "\n【行内FAQ参照ナレッジ】\n"
@@ -109,13 +119,25 @@ class BedrockNovaLiteClient:
         # Account Query Intent
         if any(w in p_lower for w in ["残高", "口座", "いくら", "明細", "取引", "入出金"]):
             if account_context:
-                acc = account_context.get("accounts", [{}])[0]
+                name = account_context.get('name_katakana', '様')
+                accs = account_context.get("accounts", [])
                 txns = account_context.get("recent_transactions", [])
                 res = f"いつもメガバンク日本銀行をご利用いただきありがとうございます。\n"
-                res += f"お客様（{account_context.get('name_katakana', '様')}）の【{acc.get('account_type', '普通預金')}】の現在残高は {acc.get('balance', 0):,} 円 です。\n"
+                res += f"お客様（{name}様）の口座残高および直近の取引明細は以下の通りです。\n\n"
+                res += "【保有口座残高一覧】\n"
+                for acc in accs:
+                    curr = acc.get('currency', 'JPY')
+                    bal = acc.get('balance', 0)
+                    bal_str = f"{bal:,.2f} {curr}" if curr != "JPY" else f"{bal:,} 円"
+                    res += f"・{acc.get('account_type')}: {bal_str}\n"
+
                 if txns:
-                    latest = txns[0]
-                    res += f"直近の取引は {latest.get('date')} にて {latest.get('type')} ({latest.get('amount'):,}円: {latest.get('description')}) となっております。"
+                    res += "\n【直近取引明細】\n"
+                    for tx in txns[:4]:
+                        amt = tx.get('amount', 0)
+                        is_neg = amt < 0
+                        amt_formatted = f"-¥{abs(amt):,}" if is_neg else f"+¥{amt:,}"
+                        res += f"・{tx.get('date')} | {tx.get('type')} | {amt_formatted} ({tx.get('description')})\n"
                 return res
             return "恐れ入ります。口座情報をご参照いただくには、ログインの上カスタマーIDをご確認ください。"
 

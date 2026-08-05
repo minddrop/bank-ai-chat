@@ -39,14 +39,13 @@
         </div>
 
         <div class="account-card" id="account-card-container">
-          <div class="account-type" id="acc-type">普通預金口座</div>
+          <div class="account-type" id="acc-type">口座一覧</div>
           <div class="account-number-row">
             <span class="label">口座番号:</span>
             <span class="value" id="acc-number">***-****123</span>
           </div>
-          <div class="balance-display">
-            <span class="balance-label">利用可能残高</span>
-            <div class="balance-amount" id="acc-balance">¥0</div>
+          <div class="sub-accounts-list" id="sub-accounts-list">
+            <!-- Dynamic sub accounts -->
           </div>
           <div class="account-meta">
             <div><span class="label">支店名:</span> <span id="acc-branch">本店営業部 (001)</span></div>
@@ -55,7 +54,7 @@
         </div>
 
         <div class="transactions-section">
-          <h3>直近取引明細 (直近4件)</h3>
+          <h3>直近取引明細 (<span id="txn-count-badge">0</span>件)</h3>
           <ul class="txn-list" id="txn-list-container">
             <!-- Dynamic txns -->
           </ul>

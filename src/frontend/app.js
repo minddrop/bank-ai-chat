@@ -44,30 +44,63 @@ function onCustomerChange() {
 
 function renderAccountCard(customer) {
   selectedCustomer = customer;
-  const mainAcc = customer.accounts[0];
 
-  document.getElementById('acc-type').textContent = `${mainAcc.account_type} (${customer.customer_tier} 会員)`;
+  document.getElementById('acc-type').textContent = `${customer.branch_name} 口座一覧 (${customer.customer_tier} 会員)`;
   document.getElementById('acc-number').textContent = `${customer.branch_code}-${customer.account_number}`;
-  document.getElementById('acc-balance').textContent = `¥${mainAcc.balance.toLocaleString()}`;
   document.getElementById('acc-branch').textContent = `${customer.branch_name} (${customer.branch_code})`;
   document.getElementById('acc-name').textContent = `${customer.name_kanji} (${customer.name_katakana})`;
 
+  // Render Sub Accounts List & Balances
+  const subAccountsList = document.getElementById('sub-accounts-list');
+  if (subAccountsList) {
+    subAccountsList.innerHTML = '';
+    (customer.accounts || []).forEach(acc => {
+      const accItem = document.createElement('div');
+      accItem.className = 'sub-account-item';
+
+      const curr = acc.currency || 'JPY';
+      const isJPY = curr === 'JPY';
+      const isNegative = acc.balance < 0;
+      const formattedBalance = isJPY
+        ? `${isNegative ? '-' : ''}¥${Math.abs(acc.balance).toLocaleString()}`
+        : `${acc.balance.toLocaleString()} ${curr}`;
+
+      accItem.innerHTML = `
+        <div class="sub-acc-header">
+          <span class="sub-acc-title">${escapeHtml(acc.account_type)}</span>
+          <span class="sub-acc-rate">${acc.interest_rate ? '年' + acc.interest_rate : ''}</span>
+        </div>
+        <div class="sub-acc-balance ${isNegative ? 'negative-balance' : ''}">${formattedBalance}</div>
+      `;
+      subAccountsList.appendChild(accItem);
+    });
+  }
+
+  // Render Transactions
   const txnContainer = document.getElementById('txn-list-container');
   txnContainer.innerHTML = '';
+  const txns = customer.recent_transactions || [];
 
-  (customer.recent_transactions || []).forEach(tx => {
+  const countBadge = document.getElementById('txn-count-badge');
+  if (countBadge) countBadge.textContent = txns.length;
+
+  txns.forEach(tx => {
     const li = document.createElement('li');
     li.className = 'txn-item';
     const isNeg = tx.amount < 0;
     const amountClass = isNeg ? 'txn-amount-neg' : 'txn-amount-pos';
     const amountText = isNeg ? `-¥${Math.abs(tx.amount).toLocaleString()}` : `+¥${tx.amount.toLocaleString()}`;
-    
+    const balAfter = tx.balance_after !== undefined ? `残高: ¥${tx.balance_after.toLocaleString()}` : '';
+
     li.innerHTML = `
-      <div>
-        <span class="txn-type">${tx.type}</span>
-        <div style="font-size: 0.68rem; color: var(--text-muted);">${tx.date} - ${tx.description}</div>
+      <div class="txn-left">
+        <span class="txn-type">${escapeHtml(tx.type)}</span>
+        <div class="txn-desc">${tx.date} - ${escapeHtml(tx.description)}</div>
       </div>
-      <div class="${amountClass}">${amountText}</div>
+      <div class="txn-right">
+        <div class="${amountClass}">${amountText}</div>
+        ${balAfter ? `<div class="txn-bal-after">${balAfter}</div>` : ''}
+      </div>
     `;
     txnContainer.appendChild(li);
   });
