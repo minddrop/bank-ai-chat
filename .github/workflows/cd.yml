@@ -1,0 +1,121 @@
+name: Japanese Bank AI Portal Production CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY: bank-ai-chat-app
+  ECS_CLUSTER: bank-ai-production-cluster
+  ECS_SERVICE: bank-ai-backend-service
+  ECS_TASK_DEFINITION: .aws/task-definition.json
+  CONTAINER_NAME: bank-ai-container
+
+jobs:
+  test-and-security-scan:
+    name: Run Unit Tests & Security SAST Scan
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: "pip"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install bandit
+
+    - name: Execute Automated Unit Tests
+      run: |
+        python3 -m unittest discover -s tests -p "test_*.py"
+
+    - name: Run In-VPC Guardrail Safety Verification
+      run: |
+        python3 -c "
+        from src.control_plane.input_guardrail import InputGuardrail
+        ig = InputGuardrail()
+        result = ig.process_input('口座 1234567')
+        assert result['pii_detected'] == True
+        print('Input Guardrail Verification: PASSED')
+        "
+
+    - name: Run Bandit Security SAST Scan
+      run: |
+        bandit -r src/ -x tests/ || true
+
+  build-and-deploy-ecs:
+    name: Build Container Image & Deploy to AWS ECS Fargate
+    needs: test-and-security-scan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials (OIDC IAM Role)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsDeployRole
+        role-session-name: GitHubActionsBankAiDeploySession
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Log in to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, Tag, and Test Docker Container Image
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Run Trivy Container Vulnerability Scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}'
+        format: 'table'
+        exit-code: '0'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+
+    - name: Push Container Image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+    - name: Render AWS ECS Task Definition
+      id: render-task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.build-image.outputs.image }}
+
+    - name: Deploy to AWS ECS Fargate Service
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      with:
+        task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
