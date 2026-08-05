@@ -19,6 +19,8 @@ from control_plane.output_guardrail import OutputGuardrail
 from control_plane.audit_logger import AuditLogger
 from rag.vector_store import VectorStore
 from llm.bedrock_nova import BedrockNovaLiteClient
+from core_banking.service import CoreBankingService
+from core_banking.client import CoreBankingClient
 
 PORT = 8000
 FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
@@ -30,8 +32,13 @@ output_guardrail = OutputGuardrail()
 audit_logger = AuditLogger()
 vector_store = VectorStore()
 bedrock_client = BedrockNovaLiteClient()
+core_banking_service = CoreBankingService()
+core_banking_client = CoreBankingClient(service=core_banking_service)
 
 def get_account_data(customer_id: str):
+    profile = core_banking_service.get_customer_profile(customer_id)
+    if profile:
+        return profile
     if os.path.exists(ACCOUNTS_FILE):
         with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -55,18 +62,38 @@ class BankPortalRequestHandler(SimpleHTTPRequestHandler):
                 "status": "ONLINE",
                 "region": "ap-northeast-1",
                 "fisc_compliance": True,
-                "llm_model": "amazon.nova-lite-v1:0 (Bedrock)"
+                "llm_model": "amazon.nova-lite-v1:0 (Bedrock)",
+                "core_banking_status": "CONNECTED"
             })
             return
 
-        if path == "/api/customers":
-            if os.path.exists(ACCOUNTS_FILE):
-                with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self._send_json(data.get("customers", []))
-                    return
-            self._send_json([])
+        if path in ("/api/customers", "/api/core/customers"):
+            self._send_json(core_banking_service.get_all_customers())
             return
+
+        # Route pattern: /api/core/customers/{customer_id} or /api/core/customers/{customer_id}/accounts or /api/core/customers/{customer_id}/transactions
+        if path.startswith("/api/core/customers/"):
+            parts = path.strip("/").split("/")
+            # parts: ['api', 'core', 'customers', '<customer_id>', ?'<subpath>']
+            if len(parts) == 4:
+                customer_id = parts[3]
+                profile = core_banking_service.get_customer_profile(customer_id)
+                if profile:
+                    self._send_json(profile)
+                else:
+                    self._send_json({"error": "Customer not found"}, status=404)
+                return
+            elif len(parts) == 5:
+                customer_id = parts[3]
+                sub = parts[4]
+                if sub == "accounts":
+                    self._send_json(core_banking_service.get_account_balances(customer_id))
+                    return
+                elif sub == "transactions":
+                    acc_id = query.get("account_id", [None])[0]
+                    lim = int(query.get("limit", [20])[0])
+                    self._send_json(core_banking_service.get_transaction_history(customer_id, account_id=acc_id, limit=lim))
+                    return
 
         if path == "/api/faq/search":
             q = query.get("q", [""])[0]
@@ -83,6 +110,19 @@ class BankPortalRequestHandler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if self.path == "/api/core/extract-account-info":
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            try:
+                data = json.loads(body)
+            except Exception:
+                self._send_json({"error": "Invalid JSON"}, status=400)
+                return
+            customer_id = data.get("customer_id", "CUST-1001")
+            info = core_banking_client.extract_account_info(customer_id)
+            self._send_json(info)
+            return
+
         if self.path == "/api/chat":
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length).decode('utf-8')
@@ -127,8 +167,8 @@ class BankPortalRequestHandler(SimpleHTTPRequestHandler):
                 })
                 return
 
-            # 2. Context Retrieval
-            customer_account = get_account_data(customer_id)
+            # 2. Context Retrieval via Core Banking Service
+            customer_account = core_banking_service.get_customer_profile(customer_id)
             rag_matches = vector_store.search(in_eval["sanitized_prompt"], top_k=2)
             rag_context_ids = [m.get("id") for m in rag_matches]
 

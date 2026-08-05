@@ -20,10 +20,12 @@ from control_plane.output_guardrail import OutputGuardrail
 from control_plane.audit_logger import AuditLogger
 from rag.vector_store import VectorStore
 from llm.bedrock_nova import BedrockNovaLiteClient
+from core_banking.service import CoreBankingService
+from core_banking.client import CoreBankingClient
 
 app = FastAPI(
     title="Japanese Major Bank AI Assistant API",
-    description="FISC and APPI Compliant Japanese Banking AI Assistant with In-VPC Control Planes",
+    description="FISC and APPI Compliant Japanese Banking AI Assistant with Core Banking REST API",
     version="1.0.0"
 )
 
@@ -42,11 +44,18 @@ output_guardrail = OutputGuardrail()
 audit_logger = AuditLogger()
 vector_store = VectorStore()
 bedrock_client = BedrockNovaLiteClient()
+core_banking_service = CoreBankingService()
+core_banking_client = CoreBankingClient(service=core_banking_service)
 
-# Load mock accounts data
+# Load mock accounts data file fallback
 ACCOUNTS_FILE = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "mock_bank_accounts.json"))
 
 def get_account_data(customer_id: str) -> Optional[Dict[str, Any]]:
+    # Use Core Banking Service SQLite query
+    profile = core_banking_service.get_customer_profile(customer_id)
+    if profile:
+        return profile
+    # Fallback to mock file if DB lookup returns None
     if os.path.exists(ACCOUNTS_FILE):
         with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -60,22 +69,54 @@ class ChatRequest(BaseModel):
     customer_id: str = "CUST-1001"
     message: str
 
+class ExtractionRequest(BaseModel):
+    customer_id: str = "CUST-1001"
+
 @app.get("/api/health")
 def health_check():
     return {
         "status": "ONLINE",
         "region": "ap-northeast-1",
         "fisc_compliance": True,
-        "llm_model": "amazon.nova-lite-v1:0 (Bedrock)"
+        "llm_model": "amazon.nova-lite-v1:0 (Bedrock)",
+        "core_banking_status": "CONNECTED"
     }
 
 @app.get("/api/customers")
 def list_customers():
-    if os.path.exists(ACCOUNTS_FILE):
-        with open(ACCOUNTS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get("customers", [])
-    return []
+    return core_banking_service.get_all_customers()
+
+# Core Banking System REST Endpoints
+@app.get("/api/core/customers")
+def core_list_customers():
+    """List all customers registered in Core Banking DB."""
+    return core_banking_service.get_all_customers()
+
+@app.get("/api/core/customers/{customer_id}")
+def core_get_customer_profile(customer_id: str):
+    """Get detailed customer profile, account balances, and recent transactions."""
+    profile = core_banking_service.get_customer_profile(customer_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Customer not found in Core Banking DB")
+    return profile
+
+@app.get("/api/core/customers/{customer_id}/accounts")
+def core_get_account_balances(customer_id: str):
+    """Get current balances for Ordinary Savings, Time Deposit, Foreign Currency accounts."""
+    return core_banking_service.get_account_balances(customer_id)
+
+@app.get("/api/core/customers/{customer_id}/transactions")
+def core_get_transactions(customer_id: str, account_id: Optional[str] = None, limit: int = 20):
+    """Get transaction history for customer."""
+    return core_banking_service.get_transaction_history(customer_id, account_id=account_id, limit=limit)
+
+@app.post("/api/core/extract-account-info")
+def core_extract_account_info(req: ExtractionRequest):
+    """
+    Dedicated extraction API for AI Chat Bot / Microservices to extract
+    current balance, account basic info, and transaction history context.
+    """
+    return core_banking_client.extract_account_info(req.customer_id)
 
 @app.get("/api/faq/search")
 def search_faq(q: str):
@@ -90,7 +131,7 @@ def chat_endpoint(req: ChatRequest):
     """
     Main Chat Endpoint executing the full Control Plane & RAG pipeline:
     1. Input Guardrail (PII Redaction & Prompt Injection Filter)
-    2. Context Retrieval (Mock Account + Rakuten Bank FAQ RAG Vector Search)
+    2. Context Retrieval (Core Banking API Extraction + FAQ RAG Vector Search)
     3. Bedrock Amazon Nova Lite LLM Execution
     4. Output Guardrail (Grounding check, PII leak scan, Disclaimer append)
     5. FISC Audit Logger recording
@@ -98,7 +139,6 @@ def chat_endpoint(req: ChatRequest):
     # Step 1: Input Guardrail Execution
     in_eval = input_guardrail.process_input(req.message)
     if not in_eval["allowed"]:
-        # Blocked at Input Control Plane
         out_blocked = {
             "validated_response": f"【セキュリティ制御】{in_eval.get('reason')}。当行のセキュリティ規約に基づき処理を停止いたしました。",
             "grounding_score": 0.0,
@@ -126,8 +166,8 @@ def chat_endpoint(req: ChatRequest):
             }
         }
 
-    # Step 2: Context Retrieval
-    customer_account = get_account_data(req.customer_id)
+    # Step 2: Context Retrieval via Core Banking Extraction API Client
+    customer_account = core_banking_service.get_customer_profile(req.customer_id)
     rag_matches = vector_store.search(in_eval["sanitized_prompt"], top_k=2)
     rag_context_ids = [m.get("id") for m in rag_matches]
 
@@ -174,3 +214,4 @@ def chat_endpoint(req: ChatRequest):
 FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if os.path.exists(FRONTEND_DIR):
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
