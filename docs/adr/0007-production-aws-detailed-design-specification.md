@@ -23,14 +23,14 @@ The AI Assistant System must operate in production under strict regulatory const
 
 ## Decision Outcome
 
-Adopt the complete **AWS Detailed Architecture Design Specification** detailed in [`docs/aws_detailed_design_specification.md`](docs/aws_detailed_design_specification.md).
+Adopt the complete **AWS Detailed Architecture Design Specification** detailed in [`docs/aws_detailed_design_specification.md`](../aws_detailed_design_specification.md).
 
 ### Architecture Highlights:
 - **VPC Address Space**: `10.100.0.0/16` across 3 Availability Zones (`ap-northeast-1a`, `1c`, `1d`).
 - **3-Tier Subnet Topology**: Public (ALB, NAT Gateways), Private App (ECS Fargate tasks), Isolated Data (OpenSearch Serverless, RDS, PrivateLink VPC Endpoints).
 - **AWS Bedrock Endpoint**: `com.amazonaws.ap-northeast-1.bedrock-runtime` for model `amazon.nova-lite-v1:0`.
 - **Vector Search Engine**: Amazon OpenSearch Serverless with KMS CMK encryption.
-- **Continuous Deployment**: GitHub Actions CD workflow ([`.github/workflows/cd.yml`](./.github/workflows/cd.yml)) using AWS OIDC role assumption, ECR image building, Trivy security scanning, and ECS Fargate deployment (configured, not executed).
+- **Continuous Deployment**: GitHub Actions CD workflow ([`.github/workflows/cd.yml`](../../.github/workflows/cd.yml)) using AWS OIDC role assumption, ECR image building, Trivy security scanning, and ECS Fargate deployment (configured, not executed).
 
 ---
 

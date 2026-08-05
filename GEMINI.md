@@ -68,14 +68,26 @@ Frequent, atomic, and clear Git commits are mandatory for this repository.
 
 ---
 
-## 5. System Directory Layout Overview
+## 5. Dual-Language README Maintenance Policy
+
+To accommodate both international developers and Japanese management/reporting lines:
+1. **README Dual Maintenance**: Dual-language documentation (English and Japanese) is maintained **EXCLUSIVELY in the README files** ([`README.md`](README.md) for English and [`README_JA.md`](README_JA.md) for Japanese).
+2. **Synchronization Rule**: Whenever new features, system architecture changes, guardrail rules, or directory layout modifications occur, developers and AI agents MUST update both [`README.md`](README.md) and [`README_JA.md`](README_JA.md) in sync.
+3. **Scope Limit**: Internal design specifications, ADRs (`docs/adr/`), and code comments are not required to be translated into dual languages; dual-language maintenance applies strictly and only to the README files.
+
+---
+
+## 6. System Directory Layout Overview
 
 ```
 bank-ai-chat/
 ├── GEMINI.md                         # Overarching project concept, rules, & guidelines
+├── README.md                         # English README (Primary documentation)
+├── README_JA.md                      # Japanese README (日本語ドキュメント)
 ├── data/                             # Production synthetic bank accounts & Rakuten FAQ JSON
 ├── docs/                             # Requirements, AWS design, CI/CD, Costs, & adr/
 ├── scripts/                          # FAQ ingestion & data tools
 ├── src/                              # backend, control_plane, llm, rag, frontend
 └── tests/                            # Automated unit tests for guardrails, RAG, and schemas
 ```
+

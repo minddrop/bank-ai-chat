@@ -91,6 +91,6 @@ This document outlines the hybrid topology (On-Premise Core Banking System + AWS
 
 For the complete sub-system network topologies, VPC IPv4 subnet plans, Amazon OpenSearch Serverless configurations, S3 Object Lock compliance settings, IAM OIDC policies, and Terraform IaC resource definitions, refer to:
 
-- [AWS Detailed Architecture Design Specification](docs/aws_detailed_design_specification.md)
-- [ADR 0007: Production AWS Detailed Architecture Design Specification](docs/adr/0007-production-aws-detailed-design-specification.md)
+- [AWS Detailed Architecture Design Specification](aws_detailed_design_specification.md)
+- [ADR 0007: Production AWS Detailed Architecture Design Specification](adr/0007-production-aws-detailed-design-specification.md)
 
