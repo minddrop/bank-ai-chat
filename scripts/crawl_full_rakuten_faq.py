@@ -151,6 +151,8 @@ def parse_links_from_html(html: str):
 
 def process_article_task(item):
     url, category = item
+    if not url or not url.startswith("http"):
+        return None
     html = fetch_rendered_dom(url, timeout=20)
     if not html:
         return None
@@ -169,8 +171,8 @@ def process_article_task(item):
 
     title = raw_title if raw_title else (filtered_lines[0] if filtered_lines else "質問")
     body = "\n".join(filtered_lines)
-    if not body:
-        body = f"楽天銀行ヘルプ「{title}」の公式情報です。詳細はWebサイトをご確認ください。"
+    if not body or body == "New Tab" or "DNS_PROBE_FINISHED_NXDOMAIN" in body or "This site can’t be reached" in body:
+        return None
 
     return {
         "category": category,
@@ -178,6 +180,7 @@ def process_article_task(item):
         "answer": body[:1200],  # Keep up to 1200 chars for rich RAG context
         "url": url
     }
+
 
 def save_incremental_json(faq_records: list):
     """Write records incrementally to data/rakuten_faq.json."""
