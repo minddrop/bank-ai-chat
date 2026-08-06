@@ -19,7 +19,7 @@ from control_plane.input_guardrail import InputGuardrail
 from control_plane.output_guardrail import OutputGuardrail
 from control_plane.audit_logger import AuditLogger
 from rag.vector_store import VectorStore
-from llm.bedrock_nova import BedrockNovaLiteClient
+from llm import get_llm_client
 from core_banking.service import CoreBankingService
 from core_banking.client import CoreBankingClient
 
@@ -43,7 +43,7 @@ input_guardrail = InputGuardrail()
 output_guardrail = OutputGuardrail()
 audit_logger = AuditLogger()
 vector_store = VectorStore()
-bedrock_client = BedrockNovaLiteClient()
+llm_client = get_llm_client()
 core_banking_service = CoreBankingService()
 core_banking_client = CoreBankingClient(service=core_banking_service)
 
@@ -74,11 +74,14 @@ class ExtractionRequest(BaseModel):
 
 @app.get("/api/health")
 def health_check():
+    provider_type = os.environ.get("LLM_PROVIDER", "bedrock").lower()
+    model_name = getattr(llm_client, "model_name", "amazon.nova-lite-v1:0")
     return {
         "status": "ONLINE",
         "region": "ap-northeast-1",
         "fisc_compliance": True,
-        "llm_model": "amazon.nova-lite-v1:0 (Bedrock)",
+        "llm_provider": provider_type,
+        "llm_model": model_name,
         "core_banking_status": "CONNECTED"
     }
 
@@ -171,8 +174,8 @@ def chat_endpoint(req: ChatRequest):
     rag_matches = vector_store.search(in_eval["sanitized_prompt"], top_k=2)
     rag_context_ids = [m.get("id") for m in rag_matches]
 
-    # Step 3: LLM Generation via Amazon Bedrock (Nova Lite)
-    llm_res = bedrock_client.generate_response(
+    # Step 3: LLM Generation (Bedrock Nova Lite or Local LLM Client)
+    llm_res = llm_client.generate_response(
         sanitized_prompt=in_eval["sanitized_prompt"],
         account_context=customer_account,
         rag_contexts=rag_matches

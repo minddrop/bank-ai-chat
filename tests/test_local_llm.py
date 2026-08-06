@@ -47,5 +47,15 @@ class TestLocalLLMClient(unittest.TestCase):
         self.assertIn("145円", res["text"])
         self.assertIn("Local", res["provider"])
 
+    def test_get_llm_client_factory(self):
+        from llm import get_llm_client
+        os.environ["LLM_PROVIDER"] = "local"
+        client_local = get_llm_client()
+        self.assertIsInstance(client_local, LocalLLMClient)
+
+        os.environ["LLM_PROVIDER"] = "bedrock"
+        client_bedrock = get_llm_client()
+        self.assertIsInstance(client_bedrock, BedrockNovaLiteClient)
+
 if __name__ == "__main__":
     unittest.main()

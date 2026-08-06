@@ -239,6 +239,7 @@ To fulfill enterprise production standards while protecting customer privacy und
 | **FR-14** | Step-Up Auth Warning | Sensitive action intent | MFA Warning modal / link | Detect transactional intent (`振込`, `暗証番号変更`, `解約`) and provide Direct Banking link. | Suppress AI execution, mandate MFA portal transition. | Medium |
 | **FR-15** | Quick Sample Prompts | Preset prompt chip click | Pre-populated prompt payload | Send predefined benchmark prompts (Balance check, FAQ inquiry, PII test, Injection test). | Default to standard prompt execution pipeline. | Medium |
 | **FR-16** | Personalized Loyalty Tier Reasoning | `customer_id`, balance delta | Savings delta calculation & Keigo explanation | Calculate balance required to reach next Happy Program tier (`スーパーVIP`, `VIP`) and detail fee waiver benefits. | If balance fetch fails, return general tier benefit threshold table. | High |
+| **FR-17** | Local LLM Provider Mode | Environment vars `LLM_PROVIDER=local`, `LOCAL_LLM_MODEL`, `LOCAL_LLM_URL` | Local LLM response payload | Route prompt generation through `LocalLLMClient` via Ollama/OpenAI API endpoint or internal Local Light Dev Engine. | If local server offline, fallback to Local Light Dev Engine. Restricted strictly to non-production dev environments. | High |
 
 ---
 
