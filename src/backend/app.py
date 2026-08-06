@@ -213,8 +213,22 @@ def chat_endpoint(req: ChatRequest):
         }
     }
 
+from fastapi.responses import FileResponse
+
 # Serve static frontend files
 FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+USER_FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend", "user"))
+
+@app.get("/user")
+def serve_user_app():
+    user_index = os.path.join(USER_FRONTEND_DIR, "index.html")
+    if os.path.exists(user_index):
+        return FileResponse(user_index)
+    raise HTTPException(status_code=404, detail="User application not found")
+
+if os.path.exists(USER_FRONTEND_DIR):
+    app.mount("/user", StaticFiles(directory=USER_FRONTEND_DIR, html=True), name="user_frontend")
+
 if os.path.exists(FRONTEND_DIR):
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 

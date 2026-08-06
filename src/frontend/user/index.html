@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>メガバンク日本銀行 | ダイレクトバンキング</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="user-portal-container">
+
+    <!-- Screen 1: Login Screen -->
+    <div class="screen-view" id="screen-login">
+      <div class="login-wrapper">
+        <div class="login-card">
+          <div class="login-header">
+            <div class="bank-symbol-large"></div>
+            <h1>メガバンク日本銀行</h1>
+            <span class="portal-sub">ダイレクトバンキング ログイン</span>
+          </div>
+
+          <!-- Quick Test User Presets -->
+          <div class="preset-login-box">
+            <span class="preset-label">テスト用 顧客即時ログイン (ワンタップ選択):</span>
+            <div class="preset-buttons" id="preset-login-buttons">
+              <!-- Dynamically populated by JS -->
+            </div>
+          </div>
+
+          <form class="login-form" onsubmit="handleLoginSubmit(event)">
+            <div class="form-group">
+              <label for="input-branch">店番号 (3桁)</label>
+              <input type="text" id="input-branch" placeholder="001" maxlength="3" value="001" required>
+            </div>
+            <div class="form-group">
+              <label for="input-account">口座番号 (7桁)</label>
+              <input type="text" id="input-account" placeholder="1234567" maxlength="7" value="1234567" required>
+            </div>
+            <div class="form-group">
+              <label for="input-password">第一暗証番号 / ログインパスワード</label>
+              <input type="password" id="input-password" value="••••••••" required>
+            </div>
+            <button type="submit" class="btn-login">
+              <span>安全にログイン</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+            </button>
+          </form>
+
+          <div class="security-footer">
+            <div class="security-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span>TLS 1.3 暗号化通信中 (FISC セキュリティ基準準拠)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Authenticated App Layout -->
+    <div class="screen-view hidden" id="screen-main-app">
+      <!-- App Header -->
+      <header class="user-header">
+        <div class="header-brand">
+          <div class="bank-symbol-sm"></div>
+          <div class="brand-text">
+            <h2>メガバンク日本銀行</h2>
+            <span>ダイレクトバンキング</span>
+          </div>
+        </div>
+
+        <nav class="user-nav">
+          <button class="user-nav-btn active" id="nav-btn-dashboard" onclick="navigateTo('dashboard')">
+            <span class="nav-icon">🏠</span>
+            <span>トップ (マイページ)</span>
+          </button>
+          <button class="user-nav-btn" id="nav-btn-transactions" onclick="navigateTo('transactions')">
+            <span class="nav-icon">📋</span>
+            <span>入出金明細</span>
+          </button>
+          <button class="user-nav-btn nav-btn-highlight" id="nav-btn-chat" onclick="navigateTo('chat')">
+            <span class="nav-icon">💬</span>
+            <span>AIコンシェルジュ相談</span>
+          </button>
+        </nav>
+
+        <div class="header-user-info">
+          <div class="user-profile-badge">
+            <span class="user-name" id="user-display-name">山田 太郎 様</span>
+            <span class="tier-pill" id="user-display-tier">スーパーVIP</span>
+          </div>
+          <button class="btn-logout" onclick="handleLogout()" title="ログアウト">
+            <span>ログアウト</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Sub-Screen A: Dashboard View -->
+      <main class="content-view" id="subscreen-dashboard">
+        <!-- Welcome & Security Alert -->
+        <div class="welcome-card">
+          <div class="welcome-text">
+            <h3>おかえりなさい、<span id="dash-welcome-name">山田 太郎</span> 様</h3>
+            <p>前回ログイン: <span id="dash-last-login">2026年08月07日 07:30</span> | 店番号: <span id="dash-branch-info">本店営業部 (001)</span></p>
+          </div>
+          <div class="quick-mfa-badge">
+            <span class="mfa-icon">🛡️</span>
+            <span>本人認証レベル: 正常 (MFA有効)</span>
+          </div>
+        </div>
+
+        <!-- Balances Grid -->
+        <div class="dashboard-grid">
+          <div class="balance-summary-card primary-card">
+            <div class="card-top">
+              <span class="card-type">普通預金 (Main Savings)</span>
+              <span class="acc-num" id="dash-savings-acc">口座: 001-1234567</span>
+            </div>
+            <div class="balance-display">
+              <span class="currency">¥</span>
+              <span class="amount" id="dash-savings-balance">1,500,000</span>
+            </div>
+            <div class="card-actions">
+              <button class="btn-card-action" onclick="navigateTo('chat', '普通預金の直近の出金明細と残高を教えて。')">
+                <span>AIで明細分析</span>
+              </button>
+              <button class="btn-card-action btn-primary" onclick="alert('振込お手続き画面へ遷移します (MFAステップアップ認証が必要)')">
+                <span>お振込</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="balance-summary-card">
+            <div class="card-top">
+              <span class="card-type">定期預金 (Time Deposit)</span>
+              <span class="interest-rate">金利 0.25%</span>
+            </div>
+            <div class="balance-display">
+              <span class="currency">¥</span>
+              <span class="amount" id="dash-time-balance">3,000,000</span>
+            </div>
+            <div class="card-meta">
+              <span>満期日: 2027-03-31</span>
+            </div>
+          </div>
+
+          <div class="balance-summary-card">
+            <div class="card-top">
+              <span class="card-type">外貨預金 (Foreign USD)</span>
+              <span class="interest-rate">金利 4.50%</span>
+            </div>
+            <div class="balance-display">
+              <span class="currency">$</span>
+              <span class="amount" id="dash-usd-balance">5,000.00</span>
+            </div>
+            <div class="card-meta">
+              <span>円換算目安: 約 750,000 円</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loyalty Program Banner -->
+        <div class="loyalty-banner-card">
+          <div class="loyalty-header">
+            <div class="loyalty-title-group">
+              <span class="loyalty-star">⭐</span>
+              <h4>ハッピープログラム ステージ特典優遇</h4>
+            </div>
+            <span class="stage-name-badge" id="dash-stage-badge">スーパーVIP</span>
+          </div>
+          <div class="loyalty-benefits">
+            <div class="benefit-item">
+              <span class="b-label">他行振込手数料 無料</span>
+              <span class="b-count">残り <strong id="dash-free-transfers">3</strong> 回 / 月</span>
+            </div>
+            <div class="benefit-item">
+              <span class="b-label">提携ATM利用手数料 無料</span>
+              <span class="b-count">残り <strong id="dash-free-atm">7</strong> 回 / 月</span>
+            </div>
+            <div class="benefit-item">
+              <span class="b-label">楽天ポイント獲得倍率</span>
+              <span class="b-count"><strong>3.0 倍</strong></span>
+            </div>
+          </div>
+          <div class="stage-upgrade-callout">
+            <button class="btn-tier-consult" onclick="navigateTo('chat', 'ハッピープログラムの次のランクアップ条件とあといくら必要か教えてください。')">
+              <span>💡 あといくらでランクアップ？AIに相談する</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Transactions Preview -->
+        <div class="recent-txns-section">
+          <div class="section-header">
+            <h4>直近のご利用明細 (直近 5件)</h4>
+            <button class="btn-text-link" onclick="navigateTo('transactions')">全明細を見る &rarr;</button>
+          </div>
+          <div class="txn-table-card">
+            <table class="txn-table">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  <th>区分</th>
+                  <th>内容 / 摘要</th>
+                  <th>お取引金額</th>
+                  <th>差引残高</th>
+                </tr>
+              </thead>
+              <tbody id="dash-txn-rows">
+                <!-- Dynamically rendered -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <!-- Sub-Screen B: Full Transaction History View -->
+      <main class="content-view hidden" id="subscreen-transactions">
+        <div class="page-title-bar">
+          <h2>入出金明細照会 (Transaction History)</h2>
+          <div class="filter-controls">
+            <input type="text" id="txn-search-keyword" placeholder="摘要名・内容で検索..." oninput="onTxnSearchInput()">
+            <button class="btn-secondary" onclick="exportTxnCSV()">CSV出力</button>
+          </div>
+        </div>
+        <div class="txn-table-card full-table-card">
+          <table class="txn-table">
+            <thead>
+              <tr>
+                <th>取引ID</th>
+                <th>日付</th>
+                <th>お取引区分</th>
+                <th>摘要 (お振込人名 / 加盟店名)</th>
+                <th>お取引金額</th>
+                <th>差引残高</th>
+              </tr>
+            </thead>
+            <tbody id="full-txn-rows">
+              <!-- Dynamically rendered -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- Sub-Screen C: Full Dedicated AI Banking Assistant View -->
+      <main class="content-view hidden" id="subscreen-chat">
+        <div class="ai-workspace-layout">
+          <!-- Left Column: Context Card & Topic Suggestions -->
+          <div class="ai-context-sidebar">
+            <div class="sidebar-card">
+              <div class="card-icon-title">
+                <span class="icon">🤖</span>
+                <h4>AIコンシェルジュについて</h4>
+              </div>
+              <p class="desc-text">
+                当行のAIアシスタントが口座情報やFAQナレッジを参照し、自然な日本語敬語で回答いたします。
+              </p>
+              <div class="security-privacy-note">
+                <span class="shield-sm">🔒</span>
+                <span>個人情報はIn-VPCコントロールプレーンで自動マスキング保護されます。</span>
+              </div>
+            </div>
+
+            <!-- Quick Benchmark Categories -->
+            <div class="topic-category-box">
+              <h4>よくあるご質問カテゴリ</h4>
+              <button class="topic-btn" onclick="sendChatPrompt('普通預金の残高と直近の取引明細を教えてください。')">
+                <span>💰 口座残高・取引履歴照会</span>
+              </button>
+              <button class="topic-btn" onclick="sendChatPrompt('他行への振込手数料と無料回数は何回残っていますか？')">
+                <span>💸 振込手数料・無料優遇回数</span>
+              </button>
+              <button class="topic-btn" onclick="sendChatPrompt('ハッピープログラムのランクアップ条件と次のステージ特典を教えてください。')">
+                <span>⭐ 会員ステージ・ランクアップ診断</span>
+              </button>
+              <button class="topic-btn" onclick="sendChatPrompt('定期預金の金利と中途解約の手続き方法を教えてください。')">
+                <span>🏦 定期預金・金利案内</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Center Dedicated Chat Panel -->
+          <div class="ai-chat-main-panel">
+            <div class="chat-header-bar">
+              <div class="bot-info">
+                <div class="bot-avatar">AI</div>
+                <div>
+                  <span class="bot-name">メガバンク日本銀行 公式AIアシスタント</span>
+                  <span class="bot-status">🟢 24時間365日 オンライン対応中</span>
+                </div>
+              </div>
+              <button class="btn-clear-chat" onclick="clearChatMessages()">チャット履歴を消去</button>
+            </div>
+
+            <!-- Chat Stream / Message Feed -->
+            <div class="chat-body" id="user-chat-messages">
+              <div class="chat-message msg-ai">
+                <div class="msg-avatar">AI</div>
+                <div class="msg-bubble">
+                  <p>いらっしゃいませ。<span id="chat-greeting-name">山田 太郎</span> 様。</p>
+                  <p>メガバンク日本銀行 AIコンシェルジュでございます。お口座の残高確認、お振込手数料、各種サービスについて丁寧にご案内いたします。</p>
+                  <span class="time-stamp">システム準備完了</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat Input Controls -->
+            <div class="chat-input-wrapper">
+              <form class="chat-input-form" onsubmit="handleUserChatSubmit(event)">
+                <input type="text" id="user-chat-input" class="user-chat-input" placeholder="質問を入力してください（例：他行振込の手数料と残額を教えてください）..." autocomplete="off">
+                <button type="submit" class="btn-send-chat" id="btn-send-chat">
+                  <span>送信</span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

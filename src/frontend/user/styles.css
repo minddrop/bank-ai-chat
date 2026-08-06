@@ -1,0 +1,866 @@
+:root {
+  --bg-primary: #06101e;
+  --bg-header: linear-gradient(180deg, #0f1c35 0%, #091326 100%);
+  --bg-card: rgba(18, 28, 48, 0.75);
+  --bg-card-hover: rgba(26, 40, 68, 0.85);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --accent-gold: #d4af37;
+  --accent-gold-glow: rgba(212, 175, 55, 0.3);
+  --accent-blue: #0072ce;
+  --accent-teal: #00d2ff;
+  --accent-emerald: #10b981;
+  --accent-rose: #f43f5e;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --font-family: 'Noto Sans JP', 'Inter', -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.user-portal-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==========================================================================
+   Screen 1: Login Screen
+   ========================================================================== */
+#screen-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 20%, #152747 0%, #06101e 80%);
+  padding: 24px;
+}
+
+.login-wrapper {
+  width: 100%;
+  max-width: 440px;
+}
+
+.login-card {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 36px 32px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(0, 114, 206, 0.15);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.bank-symbol-large {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-blue));
+  border-radius: 14px;
+  margin: 0 auto 14px auto;
+  box-shadow: 0 0 20px var(--accent-gold-glow);
+}
+
+.login-header h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.portal-sub {
+  font-size: 0.85rem;
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+
+.preset-login-box {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 24px;
+}
+
+.preset-label {
+  font-size: 0.75rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.preset-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preset-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preset-btn:hover {
+  background: rgba(0, 114, 206, 0.25);
+  border-color: var(--accent-blue);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.form-group input {
+  background: rgba(10, 16, 30, 0.8);
+  border: 1px solid var(--border-color);
+  color: #ffffff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.form-group input:focus {
+  border-color: var(--accent-teal);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
+}
+
+.btn-login {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, #00458a 100%);
+  color: #ffffff;
+  border: none;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 114, 206, 0.4);
+  transition: all 0.2s ease;
+}
+
+.btn-login:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(0, 114, 206, 0.6);
+}
+
+.security-footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.security-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Header Navigation
+   ========================================================================== */
+.user-header {
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bank-symbol-sm {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-blue));
+  border-radius: 8px;
+  box-shadow: 0 0 10px var(--accent-gold-glow);
+}
+
+.brand-text h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.brand-text span {
+  font-size: 0.72rem;
+  color: var(--accent-teal);
+}
+
+.user-nav {
+  display: flex;
+  gap: 8px;
+  background: rgba(10, 16, 30, 0.6);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.user-nav-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.user-nav-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.user-nav-btn.active {
+  background: rgba(0, 114, 206, 0.3);
+  color: #ffffff;
+  border: 1px solid rgba(0, 114, 206, 0.5);
+  font-weight: 600;
+}
+
+.user-nav-btn.nav-btn-highlight.active {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.3), rgba(0, 210, 255, 0.3));
+  border: 1px solid var(--accent-gold);
+}
+
+.header-user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-profile-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.user-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.tier-pill {
+  font-size: 0.68rem;
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.btn-logout {
+  background: rgba(244, 63, 94, 0.1);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: var(--accent-rose);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-logout:hover {
+  background: rgba(244, 63, 94, 0.25);
+}
+
+/* ==========================================================================
+   Main Content Layout
+   ========================================================================== */
+.content-view {
+  flex: 1;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Welcome Card */
+.welcome-card {
+  background: linear-gradient(135deg, rgba(15, 28, 53, 0.8), rgba(20, 36, 68, 0.8));
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.welcome-text h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.welcome-text p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.quick-mfa-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--accent-emerald);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Balances Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.balance-summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  transition: all 0.2s ease;
+}
+
+.balance-summary-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.balance-summary-card.primary-card {
+  background: linear-gradient(135deg, rgba(0, 114, 206, 0.25), rgba(15, 28, 53, 0.8));
+  border-color: rgba(0, 114, 206, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 114, 206, 0.15);
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-type {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.acc-num, .interest-rate {
+  font-size: 0.75rem;
+  color: var(--accent-teal);
+  background: rgba(0, 210, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.balance-display {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.balance-display .currency {
+  font-size: 1.2rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.balance-display .amount {
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-card-action {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-card-action:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.btn-card-action.btn-primary {
+  background: var(--accent-blue);
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Loyalty Banner */
+.loyalty-banner-card {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(15, 23, 42, 0.8));
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loyalty-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loyalty-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loyalty-title-group h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.stage-name-badge {
+  background: var(--accent-gold);
+  color: #06101e;
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.loyalty-benefits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.benefit-item {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  padding: 10px 14px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+}
+
+.b-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.b-count {
+  font-size: 0.85rem;
+
+}
+
+.btn-tier-consult {
+  width: 100%;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: var(--accent-gold);
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-tier-consult:hover {
+  background: rgba(212, 175, 55, 0.3);
+}
+
+/* Recent Transactions */
+.recent-txns-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-header h4 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.btn-text-link {
+  background: transparent;
+  border: none;
+  color: var(--accent-teal);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.txn-table-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.txn-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.txn-table th {
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.txn-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.txn-table tr:last-child td {
+  border-bottom: none;
+}
+
+.txn-type-badge {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.type-deposit { background: rgba(0, 210, 255, 0.15); color: var(--accent-teal); }
+.type-withdrawal { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); }
+
+.amount-positive { color: var(--accent-teal); font-weight: 600; }
+.amount-negative { color: var(--accent-rose); font-weight: 600; }
+
+/* ==========================================================================
+   Sub-Screen C: Full Dedicated AI Banking Chat (No Floating Box)
+   ========================================================================== */
+.ai-workspace-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  height: calc(100vh - 120px);
+}
+
+.ai-context-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sidebar-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.card-icon-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card-icon-title h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.desc-text {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.security-privacy-note {
+  margin-top: 12px;
+  font-size: 0.72rem;
+  color: var(--accent-emerald);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topic-category-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.topic-category-box h4 {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.topic-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.topic-btn:hover {
+  background: rgba(0, 114, 206, 0.2);
+  border-color: var(--accent-blue);
+}
+
+/* AI Main Chat Area */
+.ai-chat-main-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+
+.chat-header-bar {
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bot-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bot-avatar {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-blue));
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.bot-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: block;
+}
+
+.bot-status {
+  font-size: 0.72rem;
+  color: var(--accent-emerald);
+}
+
+.btn-clear-chat {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.chat-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chat-message {
+  display: flex;
+  gap: 12px;
+  max-width: 85%;
+}
+
+.chat-message.msg-user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.msg-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.msg-ai .msg-avatar {
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-blue));
+}
+
+.msg-bubble {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.msg-user .msg-bubble {
+  background: var(--accent-blue);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.time-stamp {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 6px;
+  text-align: right;
+}
+
+.chat-input-wrapper {
+  background: rgba(15, 23, 42, 0.9);
+  border-top: 1px solid var(--border-color);
+  padding: 14px 20px;
+}
+
+.chat-input-form {
+  display: flex;
+  gap: 12px;
+}
+
+.user-chat-input {
+  flex: 1;
+  background: rgba(10, 16, 30, 0.9);
+  border: 1px solid var(--border-color);
+  color: #ffffff;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.user-chat-input:focus {
+  border-color: var(--accent-teal);
+}
+
+.btn-send-chat {
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-blue));
+  border: none;
+  color: #ffffff;
+  padding: 0 20px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

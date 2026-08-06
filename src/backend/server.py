@@ -24,6 +24,7 @@ from core_banking.client import CoreBankingClient
 
 PORT = 8000
 FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
+USER_FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend", "user"))
 ACCOUNTS_FILE = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "mock_bank_accounts.json"))
 
 # Initialize components
@@ -108,6 +109,25 @@ class BankPortalRequestHandler(SimpleHTTPRequestHandler):
             logs = audit_logger.get_recent_logs(limit=25)
             self._send_json(logs)
             return
+
+        if path in ("/user", "/user/"):
+            path = "/user/index.html"
+
+        if path.startswith("/user/"):
+            rel_file = path[6:] # Strip /user/
+            target_path = os.path.join(USER_FRONTEND_DIR, rel_file)
+            if os.path.exists(target_path) and os.path.isfile(target_path):
+                self.send_response(200)
+                if target_path.endswith('.html'):
+                    self.send_header('Content-Type', 'text/html; charset=utf-8')
+                elif target_path.endswith('.css'):
+                    self.send_header('Content-Type', 'text/css; charset=utf-8')
+                elif target_path.endswith('.js'):
+                    self.send_header('Content-Type', 'application/javascript; charset=utf-8')
+                self.end_headers()
+                with open(target_path, 'rb') as f:
+                    self.wfile.write(f.read())
+                return
 
         # Default static file handler
         return super().do_GET()
