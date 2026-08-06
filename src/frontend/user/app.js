@@ -59,16 +59,45 @@ function renderPresetDefaultForm(customer) {
   document.getElementById('input-account').value = customer.account_number;
 }
 
-function handleLoginSubmit(event) {
+async function handleLoginSubmit(event) {
   event.preventDefault();
+
+  if (allCustomers.length === 0) {
+    await fetchCustomers();
+  }
+
   const branch = document.getElementById('input-branch').value.trim();
   const account = document.getElementById('input-account').value.trim();
 
-  const found = allCustomers.find(c => c.branch_code === branch && c.account_number === account) || allCustomers[0];
+  let found = allCustomers.find(c => c.branch_code === branch && c.account_number === account);
+  if (!found) {
+    found = allCustomers.find(c => c.account_number.includes(account) || c.branch_code.includes(branch));
+  }
+  if (!found && allCustomers.length > 0) {
+    found = allCustomers[0];
+  }
+
   if (found) {
     loginAsCustomer(found);
   } else {
-    alert('入力された口座情報が見つかりません。テスト用プリセットをご利用ください。');
+    // Hardcoded fallback customer if API is offline
+    loginAsCustomer({
+      customer_id: "CUST-1001",
+      name_kanji: "山田 太郎",
+      name_katakana: "ヤマダ タロウ",
+      branch_code: "001",
+      branch_name: "本店営業部",
+      account_number: "1234567",
+      customer_tier: "SUPER_VIP",
+      happy_program_stage: "スーパーVIP",
+      accounts: [
+        { account_type: "普通預金", account_type_code: "SAVINGS", balance: 2450000, currency: "JPY" },
+        { account_type: "定期預金", account_type_code: "TIME_DEPOSIT", balance: 5000000, currency: "JPY" }
+      ],
+      recent_transactions: [
+        { transaction_id: "TXN-90850", date: "2026-08-04", type: "振込入金", amount: 15000, currency: "JPY", description: "フリコミ スズキ イチロウ", balance_after: 2450000 }
+      ]
+    });
   }
 }
 
