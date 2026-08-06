@@ -44,21 +44,61 @@ bank-ai-chat/
 
 ---
 
-## 🚀 セットアップと実行方法
+## 🚀 セットアップとローカル起動方法
 
 ### 事前準備
 - Python 3.10 以上
-- `pytest`（自動テスト実行用）
+- （任意）ローカルLLM推論用の Ollama や LM Studio (例: `ollama pull qwen2.5:0.5b`)
 
-### インストール＆テスト実行
+### インストール
 1. リポジトリのクローンおよび依存関係のインストール:
    ```bash
    pip install -r requirements.txt
    ```
-2. 自動テスト・コンプライアンス検証の実行:
-   ```bash
-   pytest tests/
-   ```
+
+### 💻 ローカルアプリケーションの起動
+
+#### モード A: ローカルLLMプロバイダー（オフライン開発・AWSコスト0円推奨）
+AWS認証情報なしでローカル開発・UIテストを行う場合、ローカルLLMモードで起動します。Ollamaが稼働していれば自動連携し、未起動の場合は組み込みの「ローカル開発ライトエンジン」に自動フォールバックします:
+```bash
+# ローカルLLMプロバイダー用の環境変数を設定
+export LLM_PROVIDER=local
+export LOCAL_LLM_MODEL=qwen2.5:0.5b   # 任意: qwen2.5:0.5b, qwen2.5:1.5b, gemma:2b
+export LOCAL_LLM_URL=http://localhost:11434/v1 # 任意: Ollama/LM Studio エンドポイント
+
+# バックエンドサーバーの起動
+python3 src/backend/app.py
+```
+
+#### モード B: AWS Bedrock プロバイダーモード（本番プレビュー）
+AWS東京リージョン（`ap-northeast-1`）の Amazon Bedrock (`amazon.nova-lite-v1:0`) と連携して起動します（有効なAWS IAM認証情報が必要です）:
+```bash
+export LLM_PROVIDER=bedrock
+python3 src/backend/app.py
+```
+
+#### モード C: 標準ライブラリ HTTP サーバー（外部フレームワークなし）
+FastAPIを使わずに標準ライブラリの軽量HTTPサーバーで起動することも可能です:
+```bash
+python3 src/backend/server.py
+```
+
+### 🌐 Webフロントエンド画面の表示
+サーバー起動後、ブラウザで以下のURLにアクセスします:
+**`http://localhost:8000`**
+
+アクセスすると、以下の機能を備えたインタラクティブなバンキングAIポータル画面が起動します:
+- 丁寧な日本語敬語（丁寧語）で応答するAIチャット
+- 顧客プロフィールの切り替えデモ（`山田 太郎`、`佐藤 花子` 等）
+- In-VPC コントロールプレーン リアルタイム監視ダッシュボード（入力/出力ガードレールステータス、グラウンディングスコアメーター、改ざん防止監査ログビューア）
+
+### 🧪 自動テストとコンプライアンス検証の実行
+コントロールプレーン、RAG検索、LLMプロバイダーの自動テストを実行します:
+```bash
+python3 -m unittest discover -s tests
+# ローカルLLM動作検証スクリプトの実行:
+python3 scripts/setup_local_llm.py
+```
 
 ---
 

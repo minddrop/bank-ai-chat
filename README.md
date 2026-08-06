@@ -48,17 +48,57 @@ bank-ai-chat/
 
 ### Prerequisites
 - Python 3.10+
-- `pytest` for automated test execution
+- (Optional) Ollama or LM Studio for local LLM inference (e.g., `ollama pull qwen2.5:0.5b`)
 
-### Installation & Execution
+### Installation
 1. Clone the repository and install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-2. Run unit and compliance test suite:
-   ```bash
-   pytest tests/
-   ```
+
+### 💻 Running the Application Locally
+
+#### Mode A: Local LLM Provider (Recommended for Offline Dev & Zero AWS Cost)
+Run the application in local provider mode without AWS credentials. The system connects to a local Ollama server if active, or automatically falls back to the built-in Local Light Development Engine:
+```bash
+# Set environment variables for Local LLM Provider
+export LLM_PROVIDER=local
+export LOCAL_LLM_MODEL=qwen2.5:0.5b   # Optional: qwen2.5:0.5b, qwen2.5:1.5b, gemma:2b
+export LOCAL_LLM_URL=http://localhost:11434/v1 # Optional: Ollama/LM Studio endpoint
+
+# Launch the FastAPI backend server
+python3 src/backend/app.py
+```
+
+#### Mode B: AWS Bedrock Provider Mode (Production Preview)
+Run against live Amazon Bedrock (`amazon.nova-lite-v1:0`) in AWS Tokyo (`ap-northeast-1`) (requires active AWS IAM credentials):
+```bash
+export LLM_PROVIDER=bedrock
+python3 src/backend/app.py
+```
+
+#### Mode C: Standard HTTP Server (Zero External Frameworks)
+Alternatively, launch using the native Python standard library HTTP server:
+```bash
+python3 src/backend/server.py
+```
+
+### 🌐 Accessing the Web Interface
+Once the server is running, open your web browser and navigate to:
+**`http://localhost:8000`**
+
+This loads the interactive Japanese Banking AI Portal UI, featuring:
+- Live Chat Assistant with natural Japanese Keigo responses
+- Synthetic Customer Context Switcher (`山田 太郎`, `佐藤 花子`)
+- In-VPC Control Plane Telemetry Dashboard (Input/Output Guardrail status, Grounding score gauge, and FISC Audit log viewer)
+
+### 🧪 Running Unit & Compliance Tests
+Run the automated test suite across control planes, RAG engines, and LLM providers:
+```bash
+python3 -m unittest discover -s tests
+# or verify local LLM setup specifically:
+python3 scripts/setup_local_llm.py
+```
 
 ---
 
