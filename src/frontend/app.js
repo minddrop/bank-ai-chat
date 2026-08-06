@@ -69,14 +69,16 @@ async function loadCustomers() {
     const dropdown = document.getElementById('customer-select');
     const coreDropdown = document.getElementById('core-customer-select');
 
-    dropdown.innerHTML = '';
+    if (dropdown) dropdown.innerHTML = '';
     if (coreDropdown) coreDropdown.innerHTML = '';
 
     currentCustomers.forEach((c) => {
-      const opt = document.createElement('option');
-      opt.value = c.customer_id;
-      opt.textContent = `${c.name_kanji} (${c.name_katakana})`;
-      dropdown.appendChild(opt);
+      if (dropdown) {
+        const opt = document.createElement('option');
+        opt.value = c.customer_id;
+        opt.textContent = `${c.name_kanji} (${c.name_katakana})`;
+        dropdown.appendChild(opt);
+      }
 
       if (coreDropdown) {
         const optCore = document.createElement('option');
