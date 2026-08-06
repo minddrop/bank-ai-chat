@@ -218,3 +218,8 @@ FRONTEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "f
 if os.path.exists(FRONTEND_DIR):
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
+if __name__ == "__main__":
+    import uvicorn
+    print("Starting Japanese Bank AI Assistant FastAPI Server on http://localhost:8000 ...")
+    uvicorn.run("backend.app:app", host="0.0.0.0", port=8000, reload=True)
+
