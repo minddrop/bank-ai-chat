@@ -116,6 +116,35 @@ class BedrockNovaLiteClient:
         """High-fidelity emulation of Bedrock Nova Lite Japanese bank response."""
         p_lower = prompt.lower()
 
+        # Tier / Loyalty Stage Upgrade Query Intent (会員ステージ・ランクアップ差額計算)
+        if any(w in p_lower for w in ["ランク", "ステージ", "スーパーvip", "vip", "ハッピープログラム", "あといくら", "ランクアップ", "save more", "higher tier", "条件"]):
+            if account_context:
+                name = account_context.get('name_katakana', '様')
+                accs = account_context.get("accounts", [])
+                savings_bal = 0
+                for acc in accs:
+                    if acc.get("account_type_code") == "SAVINGS" or "普通預金" in acc.get("account_type", ""):
+                        savings_bal = acc.get("balance", 0)
+                        break
+                
+                # Default Super VIP threshold is 3,000,000 JPY
+                target_threshold = 3000000
+                delta = max(0, target_threshold - savings_bal)
+                
+                res = f"いつもメガバンク日本銀行をご利用いただきありがとうございます。\n"
+                res += f"{name}様の現在の普通預金残高は【{savings_bal:,} 円】です。\n\n"
+                if delta > 0:
+                    res += f"ハッピープログラムの最上位ステージ『スーパーVIP』（普通預金残高3,000,000円以上）を達成するには、あと【{delta:,} 円】のご預金が必要です。\n\n"
+                    res += "【スーパーVIP達成時の優遇特典】\n"
+                    res += "・他行振込手数料：毎月3回まで無料\n"
+                    res += "・ATM利用手数料：毎月7回まで無料\n"
+                    res += "・楽天ポイント獲得倍率：3倍\n\n"
+                    res += f"あと {delta:,} 円をご入金いただくか、他行からの振込受取等を組み合わせることで、翌月より自動的にスーパーVIPステージへランクアップいたします。"
+                else:
+                    res += "現在、すでに最高位ステージ『スーパーVIP』の条件を達成されています！\n"
+                    res += "他行振込手数料月3回無料・ATM利用手数料月7回無料の優遇特典をご利用いただけます。"
+                return res
+
         # Account Query Intent
         if any(w in p_lower for w in ["残高", "口座", "いくら", "明細", "取引", "入出金"]):
             if account_context:

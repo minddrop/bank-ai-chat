@@ -107,6 +107,7 @@ To fulfill full-scale POC standards while protecting customer privacy under APPI
 | **FR-13** | Multi-account Type Support | Handle Ordinary Savings (普通預金), Time Deposit (定期預金), Foreign Currency (外貨預金), and Card Loans. | Medium |
 | **FR-14** | Step-Up Auth Warning | Direct customers to authenticated Direct Banking for high-security operations (振込・解約). | Medium |
 | **FR-15** | Quick Sample Prompts | Provide one-click sample chips (Balance check, FAQ search, PII masking test, Injection test). | Medium |
+| **FR-16** | Personalized Loyalty Tier Reasoning | Fuses customer balance and RAG loyalty program criteria to compute savings delta (目標ランクアップ追加預金額) and explain fee waiver benefits per Banking Act rules. | High |
 
 ---
 

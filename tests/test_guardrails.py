@@ -51,5 +51,27 @@ class TestGuardrails(unittest.TestCase):
         self.assertTrue(result["financial_advice_blocked"])
         self.assertIn("回答制限", result["validated_response"])
 
+    def test_personalized_loyalty_tier_reasoning(self):
+        from llm.bedrock_nova import BedrockNovaLiteClient
+        client = BedrockNovaLiteClient()
+        mock_profile = {
+            "customer_id": "CUST-1001",
+            "name_katakana": "ヤマダ タロウ",
+            "accounts": [
+                {"account_type": "普通預金", "account_type_code": "SAVINGS", "balance": 2450000, "currency": "JPY"}
+            ]
+        }
+        res = client.generate_response(
+            sanitized_prompt="スーパーVIPランクに上がるにはあといくら貯金すればいいですか？",
+            account_context=mock_profile
+        )
+        guardrail = OutputGuardrail()
+        out_eval = guardrail.process_output(res["text"])
+        
+        self.assertFalse(out_eval["financial_advice_blocked"])
+        self.assertIn("550,000", out_eval["validated_response"])
+        self.assertIn("スーパーVIP", out_eval["validated_response"])
+        self.assertTrue(out_eval["disclaimer_appended"])
+
 if __name__ == "__main__":
     unittest.main()

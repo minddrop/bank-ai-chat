@@ -88,9 +88,10 @@ An architectural compliance audit of initial draft requirements identified criti
   - The system **SHALL** parse and cross-validate all numeric financial values (interest rates, fee amounts in JPY, account balances) in the generated response against ground-truth source data.
   - Any mismatch between LLM-generated numbers and source context **MUST** trigger an immediate response override.
 
-- **REQ-OUT-04 [FIEA Investment & Stock Solicitation Prohibitions]**:
+- **REQ-OUT-04 [FIEA Investment Prohibitions vs. Permitted Personalized Banking Reasoning]**:
   - The Outbound Guardrail **SHALL** evaluate responses for compliance with the Financial Instruments and Exchange Act (FIEA Article 38).
-  - The AI assistant **MUST NOT** provide specific stock price predictions, mutual fund purchase recommendations, or guaranteed investment return statements. Responses violating this rule **MUST** be replaced with standard regulatory guidance text.
+  - The AI assistant **SHALL BE PERMITTED** to perform personalized commercial banking calculations for deposit accounts (普通預金・定期預金), such as calculating the additional savings required ($\text{Target Threshold} - \text{Current Balance} = \text{Savings Delta}$) to reach a higher loyalty stage (e.g. Super VIP) and explaining associated fee waiver benefits under the Banking Act (銀行法).
+  - The AI assistant **MUST NOT** provide specific stock price predictions, mutual fund purchase recommendations, cryptocurrency advice, or guaranteed investment return statements. Responses violating this prohibition **MUST** be replaced with standard regulatory guidance text.
 
 - **REQ-OUT-05 [Mandatory Japanese Legal Disclaimer Appending]**:
   - Every AI response **MUST** automatically append the localized banking legal disclaimer:  
