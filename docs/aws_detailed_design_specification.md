@@ -4,7 +4,7 @@
 **System Name**: Japanese Major Bank Production AI Assistant System  
 **AWS Target Region**: Tokyo (`ap-northeast-1`)  
 **Secondary DR Region**: Osaka (`ap-northeast-2`)  
-**Compliance Standards**: FISC Security Standards (FISC安全対策基準), APPI (個人情報保護法), FSA Guidelines (金融庁AIガイドライン), Banking Act (銀行法), FIEA (金融商品取引法)  
+**Compliance Standards**: FISC Security Standards (FISC安全対策基準), APPI (個人情報保護法), FSA Guidelines (金融庁AIガイドライン), Banking Act (銀行法), FIEA (金融商品取引法), PCI-DSS 4.0, GLBA Safeguards Rule (16 CFR Part 314), CFPB AI Guidance, SR 11-7, ISO 42001/AIUC-1, NYDFS Part 500  
 
 ---
 
@@ -19,12 +19,12 @@
 | Public Subnet 1A | `ap-northeast-1a` | `10.100.1.0/24` | Internet Gateway (IGW) | Application Load Balancer (ALB), NAT Gateway 1A |
 | Public Subnet 1C | `ap-northeast-1c` | `10.100.2.0/24` | Internet Gateway (IGW) | Application Load Balancer (ALB), NAT Gateway 1C |
 | Public Subnet 1D | `ap-northeast-1d` | `10.100.3.0/24` | Internet Gateway (IGW) | Application Load Balancer (ALB), NAT Gateway 1D |
-| Private App Subnet 1A | `ap-northeast-1a` | `10.100.10.0/23` | NAT Gateway 1A / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Control Planes) |
-| Private App Subnet 1C | `ap-northeast-1c` | `10.100.12.0/23` | NAT Gateway 1C / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Control Planes) |
-| Private App Subnet 1D | `ap-northeast-1d` | `10.100.14.0/23` | NAT Gateway 1D / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Control Planes) |
-| Isolated Data Subnet 1A | `ap-northeast-1a` | `10.100.20.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, RDS PostgreSQL Read Replica |
-| Isolated Data Subnet 1C | `ap-northeast-1c` | `10.100.21.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, RDS PostgreSQL Main |
-| Isolated Data Subnet 1D | `ap-northeast-1d` | `10.100.22.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, VPC Endpoints Interfaces |
+| Private App Subnet 1A | `ap-northeast-1a` | `10.100.10.0/23` | NAT Gateway 1A / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Dual Control Planes) |
+| Private App Subnet 1C | `ap-northeast-1c` | `10.100.12.0/23` | NAT Gateway 1C / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Dual Control Planes) |
+| Private App Subnet 1D | `ap-northeast-1d` | `10.100.14.0/23` | NAT Gateway 1D / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Dual Control Planes) |
+| Isolated Data Subnet 1A | `ap-northeast-1a` | `10.100.20.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Salted Token Vault, KMS Endpoint |
+| Isolated Data Subnet 1C | `ap-northeast-1c` | `10.100.21.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Salted Token Vault, Bedrock Endpoint |
+| Isolated Data Subnet 1D | `ap-northeast-1d` | `10.100.22.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Salted Token Vault, S3 Gateway Endpoint |
 
 ### 1.2 AWS PrivateLink & Interface VPC Endpoints
 To satisfy FISC data isolation mandates, network traffic to AWS services MUST NOT cross the public Internet. The following Interface/Gateway endpoints are deployed inside the Isolated Data Subnets:
@@ -39,62 +39,64 @@ To satisfy FISC data isolation mandates, network traffic to AWS services MUST NO
 
 ---
 
-## 2. In-VPC Dual Control Plane Architecture
+## 2. In-VPC Dual Control Plane Architecture & Microservice Pipeline
 
 ```
-                    ┌──────────────────────────────────────────────┐
-                    │ Client Browser / Internet Banking App        │
-                    └──────────────────────┬───────────────────────┘
-                                           │ HTTPS / TLS 1.3 (Port 443)
-                                           ▼
-                    ┌──────────────────────────────────────────────┐
-                    │ AWS WAF (Managed OWASP + FISC Rate Rules)    │
-                    └──────────────────────┬───────────────────────┘
-                                           │
-                                           ▼
-                    ┌──────────────────────────────────────────────┐
-                    │ Application Load Balancer (ALB)              │
-                    └──────────────────────┬───────────────────────┘
-                                           │ Private App Subnet (Multi-AZ)
-                                           ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Amazon ECS Fargate Container Service (`src/backend`)                                    │
-│                                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 1. INPUT CONTROL PLANE (`src/control_plane/input_guardrail.py`)                  │  │
-│  │    - Prompt Injection & System Override Defense                                  │  │
-│  │    - PII Interceptor & Tokenizer: Account No (`\d{7}`), Katakana, PIN, Phone     │  │
-│  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
-│                                           │ Sanitized Prompt                            │
-│                                           ▼                                            │
-│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 2. CONTEXT RETRIEVAL LAYER (`src/rag`)                                           │  │
-│  │    - Amazon OpenSearch Serverless Vector Search (Rakuten FAQ Embeddings)          │  │
-│  │    - Core Banking Mock Integration (`src/core_banking/`)                         │  │
-│  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
-│                                           │ Context Payload                            │
-│                                           ▼                                            │
-│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 3. INFERENCE LAYER (`src/llm/bedrock_nova.py`)                                   │  │
-│  │    - Amazon Bedrock Runtime (VPC Endpoint)                                       │  │
-│  │    - Model: `amazon.nova-lite-v1:0` (Tokyo ap-northeast-1)                      │  │
-│  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
-│                                           │ Raw LLM Generation                         │
-│                                           ▼                                            │
-│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 4. OUTPUT CONTROL PLANE (`src/control_plane/output_guardrail.py`)                │  │
-│  │    - Grounding Score Evaluator (Context Match % Verification)                    │  │
-│  │    - Prohibited Investment Advice & Stock solicitation filter (FIEA compliance)  │  │
-│  │    - Mandatory Japanese Legal Disclaimer Appender                                │  │
-│  └────────────────────────────────────────┬─────────────────────────────────────────┘  │
-│                                           │ Validated Output                            │
-│                                           ▼                                            │
-│  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 5. FISC AUDIT LOGGER (`src/control_plane/fisc_audit_logger.py`)                  │  │
-│  │    - SHA-256 Signature Computation & Log Entry Assembly                          │  │
-│  │    - CloudWatch Logs + Encrypted S3 Bucket (Object Lock 10-Year Mode)            │  │
-│  └──────────────────────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+                    ┌─────────────────────────────────────────────────────────────┐
+                    │ Client Browser / Internet Banking Web Portal / Mobile App   │
+                    └──────────────────────────────┬──────────────────────────────┘
+                                                   │ HTTPS / TLS 1.3 (Port 443)
+                                                   ▼
+                    ┌─────────────────────────────────────────────────────────────┐
+                    │ AWS WAF (Managed OWASP + FISC Rate Rules + Rate Limiters)   │
+                    └──────────────────────────────┬──────────────────────────────┘
+                                                   │
+                                                   ▼
+                    ┌─────────────────────────────────────────────────────────────┐
+                    │ Application Load Balancer (ALB) Multi-AZ                     │
+                    └──────────────────────────────┬──────────────────────────────┘
+                                                   │ Private App Subnet (Multi-AZ)
+                                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Amazon ECS Fargate Container Service (`src/backend`)                                                     │
+│                                                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ 1. INPUT CONTROL PLANE & INLINE DLP (`src/control_plane/input_guardrail.py`) [P95 <= 45ms]         │  │
+│  │    - Unicode NFC Normalization & Zero-Width Space (`U+200B`) / Cipher Stripper                     │  │
+│  │    - Direct & Indirect Prompt Injection Classifier (OWASP LLM01/02)                              │  │
+│  │    - Multi-Pattern PII Redactor & Salted Token Vault (`[TOKEN_ACCT_a1b2c3d4]`) (APPI / PCI-DSS 4.0)│  │
+│  │    - Payload Bounds (1,000 chars / 500 tokens) & Executable Code / SSRF Sanitizer                 │  │
+│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                                    │ Sanitized Prompt Payload                           │
+│                                                    ▼                                                    │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ 2. CONTEXT RETRIEVAL LAYER & RAG RBAC (`src/rag`) [P95 <= 85ms]                                   │  │
+│  │    - OpenSearch Serverless Vector Search with Tier-Based RBAC Metadata Filter                      │  │
+│  │    - Core Banking Integration (Read-Only OAuth 2.0 mTLS Mock Interface)                           │  │
+│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                                    │ Context Payload                                    │
+│                                                    ▼                                                    │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ 3. INFERENCE LAYER (`src/llm/bedrock_nova.py`) [P95 <= 450ms TTFT]                                │  │
+│  │    - Amazon Bedrock Runtime via Private VPC Interface Endpoint                                   │  │
+│  │    - Model: `amazon.nova-lite-v1:0` (Tokyo `ap-northeast-1`)                                      │  │
+│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                                    │ Raw LLM Generated Output                           │
+│                                                    ▼                                                    │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ 4. OUTPUT CONTROL PLANE & POST-DLP (`src/control_plane/output_guardrail.py`) [P95 <= 50ms]        │  │
+│  │    - Natural Language Inference (NLI) Entailment Grounding Verification (Entailment Score >= 0.85) │  │
+│  │    - Outbound PII Reflection Scanner & Financial Numeric Value Integrity Check                    │  │
+│  │    - FIEA Article 38 Prohibited Financial Solicitation Filter & Legal Disclaimer Appender         │  │
+│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
+│                                                    │ Validated Response + Metadata                      │
+│                                                    ▼                                                    │
+│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
+│  │ 5. FISC AUDIT LOGGER & TELEMETRY (`src/control_plane/fisc_audit_logger.py`) [P95 <= 12ms Async]   │  │
+│  │    - Cryptographic SHA-256 Signature Assembly & Security Event CloudWatch Metric Publisher       │  │
+│  │    - Immutable Stream to S3 Object Lock (10-Year WORM Compliance Mode)                           │  │
+│  └───────────────────────────────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -119,16 +121,23 @@ To satisfy FISC data isolation mandates, network traffic to AWS services MUST NO
 
 ---
 
-## 4. Storage, Vector DB & Audit Logging Specifications
+## 4. Storage, Token Vault, Vector DB & Audit Logging Specifications
 
-### 4.1 Amazon OpenSearch Serverless Vector Engine
+### 4.1 In-VPC KMS Salted Token Vault
+- **Encryption Engine**: AWS KMS Customer Managed Key (`aws:kms`) with AES-256 GCM encryption.
+- **Vault Retention**: Ephemeral in-memory database bound strictly to request lifecycle.
+- **Token Format**: Cryptographically salted UUID strings (`[TOKEN_ACCT_a1b2c3d4]`).
+- **Session Zeroization**: Conversation buffers zeroized within $< 10\text{ ms}$ upon session termination or profile switch per GLBA and NYDFS rules.
+
+### 4.2 Amazon OpenSearch Serverless Vector Engine
 - **Collection Type**: `VECTORSEARCH`
 - **Encryption**: KMS Customer Managed Key (CMK)
 - **Network Access**: Private VPC Endpoint Access Only
 - **Vector Metric**: Cosine Similarity / HNSW (Hierarchical Navigable Small World)
-- **Index Schemas**: Rakuten Bank FAQ 10,000+ chunk embeddings (1536-dim vectors)
+- **Index Schemas**: Rakuten Bank FAQ 10,000+ chunk embeddings (1,536-dim vectors)
+- **RBAC Filtering**: Metadata pre-filtering on customer authorization tiers (`REGULAR`, `PREMIUM`, `VIP`, `SUPER_VIP`).
 
-### 4.2 S3 Bucket & FISC Object Lock Compliance
+### 4.3 S3 Bucket & FISC Object Lock Compliance
 - **Audit Bucket Name**: `japan-bank-ai-audit-log-ap-northeast-1`
 - **Object Lock Configuration**:
   - Mode: `COMPLIANCE` (Cannot be deleted or modified by any user including AWS Root Account)
@@ -156,7 +165,7 @@ To satisfy FISC data isolation mandates, network traffic to AWS services MUST NO
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ On-Premise Core Banking Data Center (東京勘定系センター)      │
-│  - Core Mainframe (勘定系 DB)                               │
+│  - Core Mainframe (勘定系 DB - Read Only)                   │
 │  - PII Vault & Customer Master DB                           │
 │  - Direct Connect Customer Gateway (CGW)                    │
 └──────────────┬──────────────────────────────┬───────────────┘
@@ -182,8 +191,6 @@ To satisfy FISC data isolation mandates, network traffic to AWS services MUST NO
 
 ## 7. Infrastructure as Code (Terraform IaC Example Snippet)
 
-Below is an IaC Terraform specification snippet for provisioning the core compliance resources in `ap-northeast-1`:
-
 ```hcl
 terraform {
   required_version = ">= 1.5.0"
@@ -201,7 +208,7 @@ provider "aws" {
     tags = {
       Environment = "Production"
       Project     = "JapaneseBankAiAssistant"
-      Compliance  = "FISC-APPI-FSA"
+      Compliance  = "FISC-APPI-FSA-PCI-GLBA-NYDFS"
     }
   }
 }
@@ -258,8 +265,14 @@ resource "aws_vpc_endpoint" "bedrock_runtime" {
 
 | Regulation / Standard | AWS Implementation Mechanism | Verification Status |
 |---|---|---|
-| **APPI (個人情報保護法)** | In-VPC Input Control Plane PII Redaction + Private VPC Endpoints | Verified (Zero PII transmitted to LLM) |
-| **FSA AI Guidelines** | Grounding Score calculation + FISC Audit Trail with SHA-256 signature | Verified |
-| **FIEA (金融商品取引法)** | Output Control Plane Investment Advice Blocking Filter | Verified |
-| **FISC Security Standards** | AWS Tokyo `ap-northeast-1` data residency + KMS AES-256 + S3 10-Yr Object Lock | Verified |
+| **APPI (個人情報保護法)** | In-VPC Input DLP Multi-Pattern Masking + KMS Salted Token Vault | Verified (Zero PII transmitted to LLM) |
+| **FSA AI Guidelines** | NLI Entailment Grounding ($\ge 0.85$) + SHA-256 FISC Audit Trail | Verified |
+| **FIEA (金融商品取引法)** | Output Control Plane Investment Solicitation Filter (Art 38) | Verified |
+| **FISC Security Standards** | AWS Tokyo `ap-northeast-1` residency + KMS AES-256 + 10-Yr S3 WORM Lock | Verified |
 | **Banking Act (銀行法)** | Informational boundary + Mandatory Japanese legal disclaimer injection | Verified |
+| **PCI-DSS 4.0** | 16-digit PAN Masking (Req 3.3/3.4) + WAF OWASP Application Shield (Req 6.4.3) | Verified |
+| **GLBA Safeguards Rule** | KMS CMK NPI Encryption (§ 314.4) + Zero-Trust Memory Isolation | Verified |
+| **CFPB AI Chatbot Guidance** | Grounding Entailment prevents financial hallucination; Human Escalation UI | Verified |
+| **SR 11-7 Model Risk** | Automated daily drift tracking, refusal rate analytics, latency distribution | Verified |
+| **ISO 42001 / AIUC-1** | Direct/Indirect Prompt Injection Classifier + Unicode NFC Normalization | Verified |
+| **NYDFS Part 500** | SHA-256 Audit Trail (500.06) + Step-Up MFA Boundary (500.12) | Verified |

@@ -132,44 +132,47 @@ To fulfill full-scale POC standards while protecting customer privacy under APPI
 ### 6.1 End-to-End Customer Chat & Control Plane Workflow
 
 ```
-Customer Input (Browser)
+Customer Input Payload (Browser / Mobile Portal)
        │
        ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 1: Input Control Plane                              │
-│  - Check Prompt Injection / System Override              │
-│  - Scrub PII (Account No \d{7}, Katakana Name, Phone)   │
-└──────────────────────────┬───────────────────────────────┘
-                           │ Sanitized Prompt
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 2: RAG Context & Account Lookup                     │
-│  - Query Rakuten FAQ Vector Store (TF-IDF/Cosine)        │
-│  - Fetch Mock Customer Account Data (In-Memory/DB)       │
-└──────────────────────────┬───────────────────────────────┘
-                           │ Context Payload
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 3: Amazon Bedrock Inference (ap-northeast-1)        │
-│  - Amazon Nova Lite (amazon.nova-lite-v1:0)              │
-│  - System Prompt: Japanese Bank Keigo Business Persona   │
-└──────────────────────────┬───────────────────────────────┘
-                           │ Raw Response
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 4: Output Control Plane                             │
-│  - Check Prohibited Financial Investment Advice          │
-│  - Verify Grounding Score against RAG Context            │
-│  - Append Mandatory Japanese Legal Disclaimer            │
-└──────────────────────────┬───────────────────────────────┘
-                           │ Validated Response + Audit Metadata
-                           ▼
-┌──────────────────────────────────────────────────────────┐
-│ Step 5: FISC Audit Logger                                │
-│  - Compute SHA-256 Signature & Write to Encrypted Log    │
-└──────────────────────────┬───────────────────────────────┘
-                           │
-                           ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 1: Inbound Control Plane & DLP (FastAPI / ECS Fargate)             │
+│  - Unicode NFC Normalization & Zero-Width (`U+200B`) / Cipher Stripper  │
+│  - Direct & Indirect Prompt Injection Classifier (OWASP LLM01/LLM02)    │
+│  - PII Masking & KMS Salted Token Vault (`[TOKEN_ACCT_a1b2c3d4]`)       │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Sanitized Prompt Payload [P95 <= 45ms]
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 2: RAG Context & Core Banking Retrieval                            │
+│  - OpenSearch Serverless Vector Store Query (Tier-Based RBAC Metadata)  │
+│  - Read-Only Core Banking Account Lookup (OAuth 2.0 mTLS)               │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Context Payload [P95 <= 85ms]
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 3: Amazon Bedrock Inference (ap-northeast-1)                       │
+│  - Model: Amazon Nova Lite (`amazon.nova-lite-v1:0`) via PrivateLink    │
+│  - System Prompt: Japanese Bank Keigo Business Persona (Read-Only)      │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Raw Generated Response [P95 <= 450ms]
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 4: Outbound Control Plane & Post-DLP                               │
+│  - NLI Entailment Grounding Verification (Entailment Score >= 0.85)     │
+│  - Outbound PII Reflection Scanner & Financial Numeric Cross-Check      │
+│  - FIEA Article 38 Prohibited Investment Advice Filter                  │
+│  - Mandatory Japanese Banking Legal Disclaimer Injection                │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Validated Response Payload [P95 <= 50ms]
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Step 5: FISC Audit Logger & Telemetry                                   │
+│  - SHA-256 Tamper-Evident Hashing & Metric Streaming to CloudWatch Logs │
+│  - Async Write to S3 Bucket with Object Lock (10-Year WORM Compliance)  │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Total Client Latency [P95 <= 630ms]
+                                     ▼
 Render Response & Live Control Plane Metrics in UI
 ```
 
