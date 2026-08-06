@@ -8,9 +8,32 @@ let selectedCustomer = null;
 let activeTab = 'chat';
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const savedMode = localStorage.getItem('bank_ai_view_mode') || 'dev';
+  setViewMode(savedMode);
   await loadCustomers();
   await refreshAuditLogs();
 });
+
+function setViewMode(mode) {
+  const chatLayout = document.getElementById('view-chat-layout');
+  const devBtn = document.getElementById('mode-btn-dev');
+  const userBtn = document.getElementById('mode-btn-user');
+  const modeToggleGroup = document.getElementById('view-mode-toggle-group');
+
+  if (!chatLayout || !devBtn || !userBtn) return;
+
+  if (mode === 'user') {
+    chatLayout.classList.add('mode-user-view');
+    devBtn.classList.remove('active');
+    userBtn.classList.add('active');
+    localStorage.setItem('bank_ai_view_mode', 'user');
+  } else {
+    chatLayout.classList.remove('mode-user-view');
+    userBtn.classList.remove('active');
+    devBtn.classList.add('active');
+    localStorage.setItem('bank_ai_view_mode', 'dev');
+  }
+}
 
 function switchTab(tabName) {
   activeTab = tabName;
@@ -18,12 +41,14 @@ function switchTab(tabName) {
   const coreLayout = document.getElementById('view-core-layout');
   const chatTabBtn = document.getElementById('tab-btn-chat');
   const coreTabBtn = document.getElementById('tab-btn-core');
+  const modeToggleGroup = document.getElementById('view-mode-toggle-group');
 
   if (tabName === 'core') {
     chatLayout.classList.add('hidden');
     coreLayout.classList.remove('hidden');
     chatTabBtn.classList.remove('active');
     coreTabBtn.classList.add('active');
+    if (modeToggleGroup) modeToggleGroup.style.display = 'none';
     if (selectedCustomer) {
       renderCoreBankingView(selectedCustomer);
     }
@@ -32,6 +57,7 @@ function switchTab(tabName) {
     chatLayout.classList.remove('hidden');
     coreTabBtn.classList.remove('active');
     chatTabBtn.classList.add('active');
+    if (modeToggleGroup) modeToggleGroup.style.display = 'flex';
   }
 }
 
