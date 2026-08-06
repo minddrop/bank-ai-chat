@@ -1,12 +1,15 @@
 """
-LLM Client Module - Amazon Bedrock Amazon Nova Lite (amazon.nova-lite-v1:0)
-Configured for ap-northeast-1 (Tokyo region) for FISC data sovereignty compliance.
+Local LLM Module - Local Development Environment for Japanese Major Bank AI Portal
+Designed strictly for local offline development using light local LLM models (e.g. Ollama, LM Studio, vLLM, or Transformers).
+Note: This local LLM provider is for local developer workflows only and will NOT be deployed to AWS production.
 """
 
 import json
 import os
 import time
-from typing import Dict, Any, List
+import urllib.request
+import urllib.error
+from typing import Dict, Any, List, Optional
 
 SYSTEM_PROMPT_JAPANESE_BANK = (
     "あなたは日本の大手メガバンク「メガバンク日本銀行」の公式AIカスタマーアシスタントです。\n"
@@ -17,48 +20,45 @@ SYSTEM_PROMPT_JAPANESE_BANK = (
     "4. 個人情報（口座番号、暗証番号等）の入力は求めず、保護されたコンテキストのみを参照してください。"
 )
 
-class BedrockNovaLiteClient:
-    """Client for invoking Amazon Bedrock Amazon Nova Lite model, with Local LLM fallback for local development."""
+class LocalLLMClient:
+    """
+    Client for running local light LLM models during development.
+    Supports Ollama API, OpenAI-compatible local endpoints, and offline fallback.
+    """
 
-    def __init__(self, region: str = "ap-northeast-1", model_id: str = "amazon.nova-lite-v1:0"):
-        self.region = region
-        self.model_id = model_id
-        self.boto3_client = None
-        self._local_client = None
-        self._init_bedrock()
+    def __init__(
+        self,
+        base_url: Optional[str] = None,
+        model_name: Optional[str] = None,
+        timeout: int = 10
+    ):
+        self.base_url = base_url or os.environ.get("LOCAL_LLM_URL", "http://localhost:11434/v1")
+        self.model_name = model_name or os.environ.get("LOCAL_LLM_MODEL", "qwen2.5:0.5b")
+        self.timeout = timeout
 
-    def _init_bedrock(self):
-        """Try initializing boto3 bedrock-runtime client or Local LLM Client."""
-        provider = os.environ.get("LLM_PROVIDER", "").lower()
-        if provider in ["local", "ollama"]:
-            from llm.local_llm import LocalLLMClient
-            self._local_client = LocalLLMClient()
-            return
-
+    def is_local_server_available(self) -> bool:
+        """Check if local LLM server (e.g. Ollama / LM Studio) is running."""
         try:
-            import boto3
-            self.boto3_client = boto3.client('bedrock-runtime', region_name=self.region)
+            # Test endpoint health or models list
+            url = f"{self.base_url.rstrip('/')}/models"
+            req = urllib.request.Request(url, headers={"User-Agent": "BankAiLocalDev/1.0"})
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                return resp.status == 200
         except Exception:
-            self.boto3_client = None
+            return False
 
     def generate_response(
         self,
         sanitized_prompt: str,
-        account_context: Dict[str, Any] = None,
-        rag_contexts: List[Dict[str, Any]] = None
+        account_context: Optional[Dict[str, Any]] = None,
+        rag_contexts: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        """Generate response using Amazon Nova Lite model or Local LLM Client."""
-        # 0. Local LLM Provider execution if configured
-        if self._local_client or os.environ.get("LLM_PROVIDER", "").lower() in ["local", "ollama"]:
-            if not self._local_client:
-                from llm.local_llm import LocalLLMClient
-                self._local_client = LocalLLMClient()
-            return self._local_client.generate_response(sanitized_prompt, account_context, rag_contexts)
-
+        """
+        Generate Japanese response using local light LLM model or high-fidelity local emulator.
+        """
         start_time = time.time()
 
-
-        # Build context prompt
+        # Construct system and user prompt context
         context_str = ""
         if account_context:
             context_str += f"\n【お客様口座情報 (マスキング済)】\n顧客ID: {account_context.get('customer_id')}\n名義: {account_context.get('name_kanji')} ({account_context.get('name_katakana')})\n"
@@ -83,56 +83,63 @@ class BedrockNovaLiteClient:
 
         full_user_content = f"{context_str}\n【お客様からの質問】\n{sanitized_prompt}"
 
-        # 1. Try real Bedrock AWS invocation
-        if self.boto3_client and os.environ.get("AWS_ACCESS_KEY_ID"):
+        # 1. Attempt generation via local HTTP LLM Server (Ollama / OpenAI-compatible v1/chat/completions API)
+        if self.is_local_server_available():
             try:
+                chat_url = f"{self.base_url.rstrip('/')}/chat/completions"
                 payload = {
-                    "inferenceConfig": {"max_new_tokens": 512, "temperature": 0.3},
-                    "system": [{"text": SYSTEM_PROMPT_JAPANESE_BANK}],
-                    "messages": [{"role": "user", "content": [{"text": full_user_content}]}]
+                    "model": self.model_name,
+                    "messages": [
+                        {"role": "system", "content": SYSTEM_PROMPT_JAPANESE_BANK},
+                        {"role": "user", "content": full_user_content}
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 512
                 }
-                response = self.boto3_client.invoke_model(
-                    modelId=self.model_id,
-                    contentType="application/json",
-                    accept="application/json",
-                    body=json.dumps(payload)
+                data_bytes = json.dumps(payload).encode("utf-8")
+                req = urllib.request.Request(
+                    chat_url,
+                    data=data_bytes,
+                    headers={"Content-Type": "application/json"}
                 )
-                result = json.loads(response['body'].read())
-                output_text = result['output']['message']['content'][0]['text']
-                latency = int((time.time() - start_time) * 1000)
-                return {
-                    "text": output_text,
-                    "model": self.model_id,
-                    "provider": "AWS Bedrock (Amazon Nova Lite)",
-                    "latency_ms": latency,
-                    "tokens": {"input": len(full_user_content), "output": len(output_text)}
-                }
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    if resp.status == 200:
+                        res_json = json.loads(resp.read().decode("utf-8"))
+                        text_out = res_json["choices"][0]["message"]["content"]
+                        latency = int((time.time() - start_time) * 1000)
+                        return {
+                            "text": text_out,
+                            "model": self.model_name,
+                            "provider": f"Local LLM Server ({self.model_name})",
+                            "latency_ms": latency,
+                            "tokens": {"input": len(full_user_content), "output": len(text_out)}
+                        }
             except Exception as e:
-                print(f"Bedrock invocation fallback: {e}")
+                print(f"[Local LLM] Server invocation error: {e}. Falling back to Local Development Engine.")
 
-        # 2. Bedrock Nova Lite Local Emulator Response Generation
-        latency = int((time.time() - start_time) * 1000) + 120
-        generated_text = self._emulator_generate(sanitized_prompt, account_context, rag_contexts)
+        # 2. Local Light Development Engine Fallback (Zero external dependency offline generation)
+        latency = int((time.time() - start_time) * 1000) + 45
+        text_out = self._local_development_generate(sanitized_prompt, account_context, rag_contexts)
 
         return {
-            "text": generated_text,
-            "model": self.model_id,
-            "provider": "Amazon Bedrock Nova Lite (ap-northeast-1 Engine)",
+            "text": text_out,
+            "model": f"{self.model_name} (Local Light Dev Engine)",
+            "provider": "Local Development Light LLM",
             "latency_ms": latency,
-            "tokens": {"input": len(full_user_content), "output": len(generated_text)}
+            "tokens": {"input": len(full_user_content), "output": len(text_out)}
         }
 
-    def _emulator_generate(
+    def _local_development_generate(
         self,
         prompt: str,
-        account_context: Dict[str, Any],
-        rag_contexts: List[Dict[str, Any]]
+        account_context: Optional[Dict[str, Any]],
+        rag_contexts: Optional[List[Dict[str, Any]]]
     ) -> str:
-        """High-fidelity emulation of Bedrock Nova Lite Japanese bank response."""
+        """High-fidelity local Japanese banking response emulator for rapid offline development."""
         p_lower = prompt.lower()
 
-        # Tier / Loyalty Stage Upgrade Query Intent (会員ステージ・ランクアップ差額計算)
-        if any(w in p_lower for w in ["ランク", "ステージ", "スーパーvip", "vip", "ハッピープログラム", "あといくら", "ランクアップ", "save more", "higher tier", "条件"]):
+        # Stage Upgrade / Balance Delta Intent
+        if any(w in p_lower for w in ["ランク", "ステージ", "スーパーvip", "vip", "ハッピープログラム", "あといくら", "ランクアップ", "条件"]):
             if account_context:
                 name = account_context.get('name_katakana', '様')
                 accs = account_context.get("accounts", [])
@@ -141,11 +148,10 @@ class BedrockNovaLiteClient:
                     if acc.get("account_type_code") == "SAVINGS" or "普通預金" in acc.get("account_type", ""):
                         savings_bal = acc.get("balance", 0)
                         break
-                
-                # Default Super VIP threshold is 3,000,000 JPY
+
                 target_threshold = 3000000
                 delta = max(0, target_threshold - savings_bal)
-                
+
                 res = f"いつもメガバンク日本銀行をご利用いただきありがとうございます。\n"
                 res += f"{name}様の現在の普通預金残高は【{savings_bal:,} 円】です。\n\n"
                 if delta > 0:
@@ -160,8 +166,8 @@ class BedrockNovaLiteClient:
                     res += "他行振込手数料月3回無料・ATM利用手数料月7回無料の優遇特典をご利用いただけます。"
                 return res
 
-        # Account Query Intent
-        if any(w in p_lower for w in ["残高", "口座", "いくら", "明細", "取引", "入出金"]):
+        # Account Balance & Transactions Intent
+        if any(w in p_lower for w in ["残高", "口座", "いくら", "明細", "取引"]):
             if account_context:
                 name = account_context.get('name_katakana', '様')
                 accs = account_context.get("accounts", [])
@@ -185,16 +191,16 @@ class BedrockNovaLiteClient:
                 return res
             return "恐れ入ります。口座情報をご参照いただくには、ログインの上カスタマーIDをご確認ください。"
 
-        # FAQ Retrieval Intent
+        # RAG FAQ Guidance Intent
         if rag_contexts:
             top_faq = rag_contexts[0]
             res = f"お問合せいただきました「{top_faq.get('question')}」につきまして、以下の通りご案内いたします。\n\n"
             res += f"{top_faq.get('answer')}\n\n"
-            res += f"関連する手続きにつきましては、当行Webサイト（{top_faq.get('url')}）もあわせてご参照ください。"
+            res += f"詳細につきましては、当行公式Webサイト（{top_faq.get('url')}）をご確認ください。"
             return res
 
-        # Default Helpful Banking Response
+        # Default Polite Japanese Banking Greeting
         return (
-            "お問合せいただきありがとうございます。メガバンク日本銀行AIカスタマーアシスタントです。\n"
-            "当行の口座残高照会、振込手続き、ATM利用手数料、定期預金のご案内など、各種サービスについてお気軽にお尋ねください。"
+            "お問合せいただきありがとうございます。メガバンク日本銀行ローカル開発用AIアシスタントです。\n"
+            "当行の口座残高照会、振込手続き、ATM手数料、定期預金のご案内など、各種サービスについてお気軽にお尋ねください。"
         )
