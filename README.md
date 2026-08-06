@@ -48,39 +48,40 @@ bank-ai-chat/
 
 ### Prerequisites
 - Python 3.10+
+- [`uv`](https://docs.astral.sh/uv/) fast Python package & environment manager
 - (Optional) Ollama or LM Studio for local LLM inference (e.g., `ollama pull qwen2.5:0.5b`)
 
 ### Installation
-1. Clone the repository and install dependencies:
+1. Clone the repository and sync dependencies using `uv`:
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
-### 💻 Running the Application Locally
+### 💻 Running the Application Locally (Using `uv`)
 
 #### Mode A: Local LLM Provider (Recommended for Offline Dev & Zero AWS Cost)
-Run the application in local provider mode without AWS credentials. The system connects to a local Ollama server if active, or automatically falls back to the built-in Local Light Development Engine:
+Run the application in local provider mode without AWS credentials using `uv`. The system connects to a local Ollama server if active, or automatically falls back to the built-in Local Light Development Engine:
 ```bash
 # Set environment variables for Local LLM Provider
 export LLM_PROVIDER=local
 export LOCAL_LLM_MODEL=qwen2.5:0.5b   # Optional: qwen2.5:0.5b, qwen2.5:1.5b, gemma:2b
 export LOCAL_LLM_URL=http://localhost:11434/v1 # Optional: Ollama/LM Studio endpoint
 
-# Launch the FastAPI backend server
-python3 src/backend/app.py
+# Launch the FastAPI backend server with uv
+uv run python3 src/backend/app.py
 ```
 
 #### Mode B: AWS Bedrock Provider Mode (Production Preview)
-Run against live Amazon Bedrock (`amazon.nova-lite-v1:0`) in AWS Tokyo (`ap-northeast-1`) (requires active AWS IAM credentials):
+Run against live Amazon Bedrock (`amazon.nova-lite-v1:0`) in AWS Tokyo (`ap-northeast-1`) using `uv` (requires active AWS IAM credentials):
 ```bash
 export LLM_PROVIDER=bedrock
-python3 src/backend/app.py
+uv run python3 src/backend/app.py
 ```
 
 #### Mode C: Standard HTTP Server (Zero External Frameworks)
-Alternatively, launch using the native Python standard library HTTP server:
+Alternatively, launch using the native Python standard library HTTP server with `uv`:
 ```bash
-python3 src/backend/server.py
+uv run python3 src/backend/server.py
 ```
 
 ### 🌐 Accessing the Web Interface
@@ -93,11 +94,13 @@ This loads the interactive Japanese Banking AI Portal UI, featuring:
 - In-VPC Control Plane Telemetry Dashboard (Input/Output Guardrail status, Grounding score gauge, and FISC Audit log viewer)
 
 ### 🧪 Running Unit & Compliance Tests
-Run the automated test suite across control planes, RAG engines, and LLM providers:
+Run the automated test suite across control planes, RAG engines, and LLM providers using `uv`:
 ```bash
-python3 -m unittest discover -s tests
+uv run pytest
+# or using unittest discover:
+uv run python3 -m unittest discover -s tests
 # or verify local LLM setup specifically:
-python3 scripts/setup_local_llm.py
+uv run python3 scripts/setup_local_llm.py
 ```
 
 ---

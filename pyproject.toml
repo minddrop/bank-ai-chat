@@ -1,0 +1,18 @@
+[project]
+name = "bank-ai-chat"
+version = "1.0.0"
+description = "FISC and APPI Compliant Japanese Banking AI Assistant System"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=2.0.0",
+    "boto3>=1.28.0",
+    "requests>=2.28.0",
+    "pytest>=7.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

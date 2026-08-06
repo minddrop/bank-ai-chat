@@ -48,39 +48,40 @@ bank-ai-chat/
 
 ### 事前準備
 - Python 3.10 以上
+- [`uv`](https://docs.astral.sh/uv/)（高速Pythonパッケージ＆環境マネージャー）
 - （任意）ローカルLLM推論用の Ollama や LM Studio (例: `ollama pull qwen2.5:0.5b`)
 
 ### インストール
-1. リポジトリのクローンおよび依存関係のインストール:
+1. リポジトリのクローンおよび `uv` による依存関係の同期:
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
-### 💻 ローカルアプリケーションの起動
+### 💻 ローカルアプリケーションの起動 (`uv` 使用)
 
 #### モード A: ローカルLLMプロバイダー（オフライン開発・AWSコスト0円推奨）
-AWS認証情報なしでローカル開発・UIテストを行う場合、ローカルLLMモードで起動します。Ollamaが稼働していれば自動連携し、未起動の場合は組み込みの「ローカル開発ライトエンジン」に自動フォールバックします:
+AWS認証情報なしで `uv` を使用して起動します。Ollamaが稼働していれば自動連携し、未起動の場合は組み込みの「ローカル開発ライトエンジン」に自動フォールバックします:
 ```bash
 # ローカルLLMプロバイダー用の環境変数を設定
 export LLM_PROVIDER=local
 export LOCAL_LLM_MODEL=qwen2.5:0.5b   # 任意: qwen2.5:0.5b, qwen2.5:1.5b, gemma:2b
 export LOCAL_LLM_URL=http://localhost:11434/v1 # 任意: Ollama/LM Studio エンドポイント
 
-# バックエンドサーバーの起動
-python3 src/backend/app.py
+# uv を使用したバックエンドサーバーの起動
+uv run python3 src/backend/app.py
 ```
 
 #### モード B: AWS Bedrock プロバイダーモード（本番プレビュー）
-AWS東京リージョン（`ap-northeast-1`）の Amazon Bedrock (`amazon.nova-lite-v1:0`) と連携して起動します（有効なAWS IAM認証情報が必要です）:
+AWS東京リージョン（`ap-northeast-1`）の Amazon Bedrock (`amazon.nova-lite-v1:0`) と連携して `uv` で起動します（有効なAWS IAM認証情報が必要です）:
 ```bash
 export LLM_PROVIDER=bedrock
-python3 src/backend/app.py
+uv run python3 src/backend/app.py
 ```
 
 #### モード C: 標準ライブラリ HTTP サーバー（外部フレームワークなし）
-FastAPIを使わずに標準ライブラリの軽量HTTPサーバーで起動することも可能です:
+FastAPIを使わずに標準ライブラリの軽量HTTPサーバーを `uv` で起動することも可能です:
 ```bash
-python3 src/backend/server.py
+uv run python3 src/backend/server.py
 ```
 
 ### 🌐 Webフロントエンド画面の表示
@@ -92,12 +93,14 @@ python3 src/backend/server.py
 - 顧客プロフィールの切り替えデモ（`山田 太郎`、`佐藤 花子` 等）
 - In-VPC コントロールプレーン リアルタイム監視ダッシュボード（入力/出力ガードレールステータス、グラウンディングスコアメーター、改ざん防止監査ログビューア）
 
-### 🧪 自動テストとコンプライアンス検証の実行
-コントロールプレーン、RAG検索、LLMプロバイダーの自動テストを実行します:
+### 🧪 自動テストとコンプライアンス検証の実行 (`uv` 使用)
+コントロールプレーン、RAG検索、LLMプロバイダーの自動テストを `uv` で実行します:
 ```bash
-python3 -m unittest discover -s tests
+uv run pytest
+# または unittest discover:
+uv run python3 -m unittest discover -s tests
 # ローカルLLM動作検証スクリプトの実行:
-python3 scripts/setup_local_llm.py
+uv run python3 scripts/setup_local_llm.py
 ```
 
 ---
