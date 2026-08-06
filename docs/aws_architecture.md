@@ -143,3 +143,8 @@ For complete subnet IPv4 routing plans, Amazon OpenSearch Serverless index schem
 - [Enterprise Security, DLP & Compliance Specification](security_dlp_guardrails_requirements.md)
 - [ADR 0007: Production AWS Detailed Architecture Design Specification](adr/0007-production-aws-detailed-design-specification.md)
 - [ADR 0009: Enterprise DLP, Security Guardrails & Regulatory Compliance Framework](adr/0009-dlp-security-guardrails-and-compliance-framework.md)
+- [ADR 0015: OpenSearch Serverless Network Isolation & Vector Dimension Standard](adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md)
+- [ADR 0016: Deterministic Terraform IaC Architecture & Remote State Management](adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md)
+- [ADR 0017: Enterprise IAM Least-Privilege Access & KMS Key Policy Topology](adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md)
+- [ADR 0018: Production Observability, CloudWatch Alarms & Security Telemetry Targets](adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md)
+

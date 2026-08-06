@@ -5,11 +5,11 @@
 
 ## 1. Overview & Business Objectives
 
-This document establishes the canonical, deterministic functional, non-functional, security, data schema, API interface, error handling, state transition, CI/CD, and cost estimation specifications for the **AI Customer Assistant System** of a major Japanese commercial bank (メガバンク).
+This document establishes the canonical, deterministic functional, non-functional, security, data schema, API interface, error handling, state transition, infrastructure topology, IAM, CI/CD, and cost estimation specifications for the **AI Customer Assistant System** of a major Japanese commercial bank (メガバンク).
 
 The system serves as a 24/7/365 digital banking portal assistant deployed on AWS Tokyo (`ap-northeast-1`). It handles customer account inquiries, transaction history searches, personalized loyalty tier analysis, and general banking FAQ guidance while ensuring 100% compliance with Japanese legal regulations, Financial Services Agency (FSA) guidelines, and FISC security standards.
 
-The primary engineering objective of this specification is **zero ambiguity, zero hand-waving, and zero fallback or guessing** during implementation.
+The primary engineering objective of this specification is **zero ambiguity, zero hand-waving, and zero manual fallback or unguided guessing** during deployment and Infrastructure as Code (IaC) implementation.
 
 ---
 
@@ -209,7 +209,8 @@ To fulfill enterprise production standards while protecting customer privacy und
       "type": "array",
       "items": { "type": "number" },
       "minItems": 1024,
-      "maxItems": 1024
+      "maxItems": 1024,
+      "description": "1024-dimensional float vector produced by Amazon Titan Text Embeddings v2"
     }
   },
   "required": ["id", "category", "question", "answer", "url"]
@@ -257,23 +258,44 @@ To fulfill enterprise production standards while protecting customer privacy und
 | **NFR-10** | **Browser Support** | Desktop & Mobile Japanese browser compatibility. | Chrome, Edge, Safari, iOS/Android | BrowserStack automated cross-browser testing. |
 | **NFR-11** | **Real-Time Streaming**| HTTP Server-Sent Events (SSE) streaming support. | Zero 29s proxy timeouts | ALB idle timeout 300s; ECS Fargate continuous HTTP/1.1 SSE stream. |
 | **NFR-12** | **Zero Cold Starts** | Latency penalty for initial chat prompts. | 0ms Cold Start overhead | ECS Fargate minimum 4 warm tasks active 24/7/365. |
-
-### 5.1 Stage-by-Stage Latency SLA Budget
-
-| Pipeline Stage | Target Latency (P50) | Target Latency (P95) | Target Latency (P99) |
-|---|---|---|---|
-| **1. Input DLP & PII Scrubbing** | 15ms | 45ms | 70ms |
-| **2. RAG & Core Banking Fetch** | 35ms | 85ms | 130ms |
-| **3. Amazon Bedrock Nova Lite (TTFT)** | 180ms | 350ms | 550ms |
-| **4. Output Guardrail & Grounding** | 20ms | 50ms | 90ms |
-| **5. FISC Audit Logging (Async)** | 0ms (Non-blocking) | 0ms (Non-blocking) | 0ms (Non-blocking) |
-| **Total Client Response Time** | **250ms** | **530ms** | **840ms** |
+| **NFR-13** | **IaC Codification** | Zero manual AWS console resource creation. | 100% Codified in Terraform | `terraform plan` clean execution in GitHub Actions OIDC pipeline. |
 
 ---
 
-## 6. Complete REST & SSE API Interface Specifications
+## 6. Complete Infrastructure & Deployment Specifications
 
-### 6.1 API Overview & Global Headers
+### 6.1 Network & VPC Subnet Layout
+- **Primary VPC**: CIDR `10.100.0.0/16` in AWS Tokyo (`ap-northeast-1`).
+- **Subnet Decomposition**:
+  - `Public Subnets` (10.100.1.0/24, 10.100.2.0/24, 10.100.3.0/24): Hosts Application Load Balancers (ALB) and NAT Gateways.
+  - `Private App Subnets` (10.100.10.0/23, 10.100.12.0/23, 10.100.14.0/23): Hosts ECS Fargate tasks running FastAPI control planes.
+  - `Isolated Data Subnets` (10.100.20.0/24, 10.100.21.0/24, 10.100.22.0/24): Hosts AWS PrivateLink VPC Endpoints (Bedrock, AOSS, KMS, S3, Secrets Manager, CloudWatch Logs). Zero outbound route to 0.0.0.0/0.
+
+### 6.2 Compute Architecture (AWS ECS Fargate)
+- **Container Architecture**: Linux `ARM64` (AWS Graviton2).
+- **Task Resource Allocation**: 1 vCPU (1024 CPU units), 2 GB RAM (2048 MB memory).
+- **Auto-scaling Policy**: Minimum 4 tasks (multi-AZ warm base), maximum 30 tasks. Triggers at 70% CPU or 75% Memory utilization.
+- **Task Execution Security**: Non-root container execution (`user: "10001:10001"`), `readonlyRootFilesystem: true`, container health check executing every 15s on `/health`.
+
+### 6.3 OpenSearch Serverless (AOSS) & Storage Precision
+- **Collection Engine**: `VECTORSEARCH` with Cosine similarity distance metric (`hnsw`).
+- **Vector Dimension Standard**: **1024 dimensions** produced by Amazon Titan Text Embeddings v2 (`amazon.titan-embed-text-v2:0`).
+- **AOSS Network Security**: Network policy `AllowPublicAccess = false`, bound strictly to Private VPC Endpoint (`vpce-xxxxxxxxxxxxxxxxx`).
+- **S3 Audit Bucket**: `japan-bank-ai-audit-log-ap-northeast-1` configured with S3 Object Lock in `COMPLIANCE` mode for 10 years (3,650 days), encrypted with KMS CMK.
+
+### 6.4 Secrets Management & IAM Topology
+- **Secrets Manager ARNs**:
+  - `arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:bank-ai/vault-hmac-salt`
+  - `arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:bank-ai/oauth-client-secret`
+- **IAM Least Privilege**:
+  - `BankAiEcsTaskExecutionRole`: ECR image pull, Secrets Manager read, CloudWatch log streams.
+  - `BankAiEcsTaskRole`: Bedrock model invocation on `amazon.nova-lite-v1:0`, OpenSearch Serverless API access, S3 PutObject on audit bucket, KMS GenerateDataKey/Decrypt on CMK ARN `alias/bank-ai-cmk`.
+
+---
+
+## 7. Complete REST & SSE API Interface Specifications
+
+### 7.1 API Overview & Global Headers
 
 All API endpoints enforce HTTPS TLS 1.3 and require the following global headers:
 
@@ -286,7 +308,7 @@ All API endpoints enforce HTTPS TLS 1.3 and require the following global headers
 
 ---
 
-### 6.2 POST `/api/v1/chat/stream` (Synchronous SSE Chat Inference)
+### 7.2 POST `/api/v1/chat/stream` (Synchronous SSE Chat Inference)
 
 Initiates an interactive chat session with real-time Server-Sent Events (SSE) response streaming.
 
@@ -329,269 +351,26 @@ data: {"code": "ERR-LLM-003", "message": "モデル応答の取得中にタイ�
 
 ---
 
-### 6.3 GET `/api/v1/accounts/{customer_id}`
+## 8. Observability & Alarm Targets
 
-Retrieves account list and balances for the specified customer.
-
-- **Parameters**: `customer_id` (Path, String, Required)
-- **Response 200 OK**:
-```json
-{
-  "customer_id": "CUST-1001",
-  "accounts": [
-    {
-      "account_id": "ACC-1001-SAV",
-      "account_type": "普通預金",
-      "account_type_code": "SAVINGS",
-      "balance": 2450000,
-      "currency": "JPY",
-      "interest_rate": "0.02%",
-      "maturity_date": null
-    },
-    {
-      "account_id": "ACC-1001-USD",
-      "account_type": "外貨預金",
-      "account_type_code": "FOREIGN_USD",
-      "balance": 12500.50,
-      "currency": "USD",
-      "interest_rate": "2.50%",
-      "maturity_date": null
-    }
-  ]
-}
-```
+| Metric Name | Namespace | Statistic | Window | Alarm Threshold | Priority | Action |
+|---|---|---|---|---|---|---|
+| `TargetResponseTime` | `AWS/ApplicationELB` | P95 | 5 mins | `> 800 ms` | P2 High | Scale out ECS & alert DevOps |
+| `HTTPCode_Target_5XX_Count` | `AWS/ApplicationELB` | Sum | 1 min | `> 5 reqs` | P1 Critical | Trigger immediate page & rollback |
+| `GuardrailBlockCount` | `BankAi/ControlPlane` | Sum | 5 mins | `> 10 blocks` | P2 Security | Notify SOC of prompt injection surge |
+| `GroundingViolationCount` | `BankAi/ControlPlane` | Sum | 5 mins | `> 5 violations` | P2 High | Alert AI Governance team for RAG drift |
+| `S3AuditWriteError` | `BankAi/Audit` | Sum | 1 min | `> 0 errors` | P0 Blocker | Fail closed; alert On-Call Lead |
 
 ---
 
-### 6.4 GET `/api/v1/transactions/{customer_id}`
+## 9. Production AWS Cost Estimation
 
-Retrieves transaction history.
+### Breakdown (AWS Tokyo Region `ap-northeast-1`) for 1,000,000 interactions/month
 
-- **Parameters**:
-  - `customer_id` (Path, String, Required)
-  - `limit` (Query, Integer, Optional, Default: 10, Max: 50)
-  - `account_type_code` (Query, String, Optional)
-- **Response 200 OK**:
-```json
-{
-  "customer_id": "CUST-1001",
-  "total_count": 3,
-  "transactions": [
-    {
-      "transaction_id": "TXN-90812",
-      "date": "2026-08-01",
-      "type": "振込入金",
-      "amount": 420000,
-      "currency": "JPY",
-      "description": "給与振込 カブシキガイシャABC",
-      "balance_after": 2450000
-    }
-  ]
-}
-```
-
----
-
-### 6.5 POST `/api/v1/rag/search`
-
-Performs semantic vector search against Rakuten Bank FAQ knowledge base.
-
-#### Request Schema
-```json
-{
-  "query": "他行あて振込手数料",
-  "top_k": 3,
-  "similarity_threshold": 0.75
-}
-```
-
-#### Response 200 OK Schema
-```json
-{
-  "query": "他行あて振込手数料",
-  "results_count": 1,
-  "results": [
-    {
-      "id": "FAQ-RB-1001",
-      "category": "振込・送金",
-      "question": "他行への振込手数料はいくらですか？",
-      "answer": "楽天銀行から他行口座への振込手数料は、3万元未満は145円（税込）、3万円以上は229円（税込）です。ハッピープログラムの会員ステージに応じて最大月3回まで無料になります。",
-      "similarity_score": 0.942,
-      "url": "https://help-personal.rakuten-bank.net/faq/show/1001"
-    }
-  ]
-}
-```
-
----
-
-### 6.6 GET `/api/v1/audit/logs`
-
-Retrieves audit logs (Restricted to `BANK_AUDITOR` role).
-
-- **Parameters**: `session_id` (Query, String, Optional), `limit` (Query, Integer, Default: 20)
-- **Response 200 OK**:
-```json
-{
-  "logs": [
-    {
-      "audit_id": "AUDIT-123e4567",
-      "timestamp": "2026-08-07T07:20:00Z",
-      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-      "customer_id": "CUST-1001",
-      "sanitized_query": "[NAME_MASKED]様の普通預金残高確認",
-      "grounding_score": 0.96,
-      "guardrail_status": "PASSED",
-      "sha256_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "s3_uri": "s3://bank-ai-audit-logs-ap-northeast-1/2026/08/07/audit-123e4567.json"
-    }
-  ]
-}
-```
-
----
-
-## 7. Error Handling & Failure Mode Matrix
-
-### 7.1 System Error Taxonomy
-
-| Error Code | HTTP Status | Category | Description | Keigo Customer Response Message |
-|---|---|---|---|---|
-| `ERR-PII-001` | 422 Unprocessable | DLP Guardrail | Input PII tokenization vault error | 「恐れ入りますが、ご入力内容の安全確認処理に失敗いたしました。お手数ですが、個人情報を伏せて再度お試しください。」 |
-| `ERR-SEC-001` | 400 Bad Request | Security | Prompt injection / jailbreak detected | 「セキュリティポリシーにより、ご指定の入力形式はお受付できません。行内サービスに関する一般的な質問をご入力ください。」 |
-| `ERR-RAG-002` | 503 Service Unavail | RAG Knowledge | Vector store unavailable | 「現在ナレッジ検索データベースのメンテナンスを行っております。基本口座機能に関するお問い合わせは継続してご利用いただけます。」 |
-| `ERR-LLM-003` | 504 Gateway Timeout | Bedrock Model | Bedrock response timeout (> 5s) | 「AI応答の生成に時間を要しております。大変恐縮ですが、時間を置いて再度お試しいただくか、ダイレクトバンキングをご利用ください。」 |
-| `ERR-AUTH-004` | 401 Unauthorized | Auth / RBAC | Session expired or invalid token | 「セッションの有効期限が切れております。お手数ですが、再度ログインを行ってください。」 |
-| `ERR-RATELIMIT-429` | 429 Too Many Req | Throttling | Session or IP rate limit exceeded | 「短時間でのリクエスト回数が上限を超過いたしました。1分ほどおいてから再度お試しください。」 |
-| `ERR-BANK-001` | 500 Internal Error | Core Banking | Mock core banking DB timeout | 「口座情報の取得中にシステムエラーが発生いたしました。しばらく経ってから再度お試しください。」 |
-
-### 7.2 Component Failure Fallback Behavior Matrix
-
-```mermaid
-flowchart TD
-    A[Inbound Customer Request] --> B{PII Vault Active?}
-    B -- No / Error --> C[Trip Circuit Breaker: Return ERR-PII-001]
-    B -- Yes --> D{Prompt Injection?}
-    D -- Yes --> E[Block Request: Return ERR-SEC-001 & Log Audit]
-    D -- No --> F{OpenSearch Vector Available?}
-    F -- No --> G[Fallback to Keyword Search / Direct Core Banking Lookup]
-    F -- Yes --> H[RAG Retrieval Success]
-    G --> I{Bedrock Invocation}
-    H --> I
-    I -- Timeout / 429 --> J[Exponential Backoff Retry 3x]
-    J -- Exhausted --> K[Return ERR-LLM-003 Keigo Message]
-    I -- 200 Stream --> L{Grounding Score >= 0.85?}
-    L -- No --> M[Append Unverified Grounding Notice + Legal Disclaimer]
-    L -- Yes --> N[Append Standard Legal Disclaimer]
-    M --> O[Stream Complete & Write S3 WORM Audit Log]
-    N --> O
-```
-
----
-
-## 8. State Machine Specifications & Workflows
-
-### 8.1 Customer Session Lifecycle State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> UNAUTHENTICATED
-    UNAUTHENTICATED --> AUTHENTICATED: OAuth2.0 / Session Token Issued
-    AUTHENTICATED --> ACTIVE_CHAT: Initiate Chat Session
-    ACTIVE_CHAT --> GUARDRAIL_EVAL: Submit Prompt Payload
-    GUARDRAIL_EVAL --> ACTIVE_CHAT: Response Rendered & Validated
-    ACTIVE_CHAT --> STEP_UP_MFA_REQUIRED: Transactional Intent Detected (振込/解約)
-    STEP_UP_MFA_REQUIRED --> AUTHENTICATED: Step-Up MFA Completed on Direct Banking
-    ACTIVE_CHAT --> SESSION_EXPIRED: Idle Timeout (15 mins)
-    SESSION_EXPIRED --> [*]
-```
-
-### 8.2 In-VPC Dual Control Plane Execution State Machine
-
-| State | Entering Trigger | Processing Execution | Success Exit | Failure Exit |
-|---|---|---|---|---|
-| **S0_INIT** | HTTP Request Arrives | Validate HTTP Headers & JSON Schema | Transition to `S1_INPUT_DLP` | Return HTTP 400 Bad Request |
-| **S1_INPUT_DLP** | Headers Validated | Strip zero-width chars, tokenize PII into KMS Vault, run injection classifier | Transition to `S2_CONTEXT_FETCH` | Return `ERR-PII-001` or `ERR-SEC-001` |
-| **S2_CONTEXT_FETCH** | PII Tokenized | Query OpenSearch FAQ vectors and read Core Banking DB | Transition to `S3_LLM_STREAM` | Degrade context & transition to `S3_LLM_STREAM` |
-| **S3_LLM_STREAM** | Context Assembled | Invoke Bedrock Nova Lite & stream SSE chunks | Transition to `S4_OUTPUT_DLP` | Return `ERR-LLM-003` |
-| **S4_OUTPUT_DLP** | Stream Generated | Evaluate NLI grounding score, scan PII leaks, verify FIEA compliance | Transition to `S5_DISCLAIMER` | Append grounding warning notice |
-| **S5_DISCLAIMER** | Output Scanned | Append mandatory Japanese legal disclaimers | Transition to `S6_AUDIT_LOG` | Non-bypassable stage |
-| **S6_AUDIT_LOG** | Response Sent | Generate SHA-256 digest, write async to S3 Object Lock | Transition to `S7_COMPLETE` | Log CloudWatch alarm |
-| **S7_COMPLETE** | Log Queued | Flush SSE stream `event: done` | Session Idle | Terminate connection |
-
----
-
-## 9. Security, RBAC & Step-Up Authentication Framework
-
-### 9.1 Role-Based Access Control (RBAC) Matrix
-
-| User Role | View Balance | View Transactions | RAG FAQ Search | View Audit Logs | Customer Profile Switcher |
-|---|---|---|---|---|---|
-| **RETAIL_CUSTOMER** | Own Account Only | Own Account Only | Allowed | Denied | Denied |
-| **PREMIUM_VIP** | Own Account Only | Own Account Only | Allowed | Denied | Denied |
-| **SUPER_VIP** | Own Account Only | Own Account Only | Allowed | Denied | Denied |
-| **BANK_AUDITOR** | Denied | Denied | Allowed | Full Read Access | Denied |
-| **SYSTEM_ADMIN** | Read/Write (Test DB) | Read/Write (Test DB)| Full Access | Full Access | Allowed (Demo Mode) |
-
-### 9.2 Banking Act Step-Up Authentication Boundary
-
-- **Informational Assistant Boundary (Conversational AI Allowed)**:
-  - Account balance inquiries (普通預金, 定期預金, 外貨預金).
-  - Transaction history inquiries (過去の明細照会).
-  - Fee schedules and Happy Program stage guidance (振込手数料・優遇条件).
-  - General banking FAQ inquiries (ATM利用時間・口座開設手順).
-- **Actionable Operational Boundary (Conversational AI PROHIBITED - Step-Up MFA Required)**:
-  - Funds transfer execution (振込・送金手続き).
-  - Cash advance / card loan disbursements (借入・増額申請).
-  - Account closure or PIN reset (口座解約・暗証番号変更).
-  - Personal details update (住所・電話番号変更).
-
----
-
-## 10. Workflows & Screen Wireframes
-
-### 10.1 End-to-End Sequence Diagram
-
-```
-Customer Browser           ALB / ECS Fargate         OpenSearch DB          Amazon Bedrock
-    │                             │                        │                       │
-    │── 1. POST /chat/stream ────►│                        │                       │
-    │   (Prompt + Session ID)     │── 2. PII Scrub & Vault │                       │
-    │                             │── 3. RAG Query ───────►│                       │
-    │                             │◄── 4. Top 3 FAQ Items ─│                       │
-    │                             │                                                │
-    │                             │── 5. Invoke Nova Lite Stream ─────────────────►│
-    │◄── 6. SSE event: metadata ──│                                                │
-    │◄── 7. SSE event: token ─────│◄── 8. Streaming Token Chunks ──────────────────│
-    │    (Streamed in real-time)  │                                                │
-    │                             │── 9. NLI Grounding & FIEA Check                │
-    │◄── 10. SSE event: guardrail │                                                │
-    │◄── 11. SSE event: done ─────│── 12. Async Write SHA-256 Audit Log to S3     │
-```
-
----
-
-## 11. CI/CD Plan & Automated Test Gates
-
-### 11.1 Continuous Integration Pipelines
-1. **Code Quality Gate**: `flake8 src/`, `black --check src/`, `mypy src/`.
-2. **Unit Test Suite**: `python3 -m unittest discover -s tests -p "test_*.py"`.
-3. **Guardrail Adversarial Stress Suite**:
-   - 100+ PII test vectors verifying zero unmasked account numbers (`\d{7}`) or Katakana names leakage.
-   - 50+ prompt injection jailbreak vectors testing defense rate (Requirement: 100% block rate).
-4. **Security Vulnerability Scan**: Container scanning via AWS ECR Inspector & Trivy (`SEVERITY=HIGH,CRITICAL`).
-5. **Deployment Strategy**: Blue/Green Canary Deployment via AWS ECS CodeDeploy with automatic rollback on 5xx error rate > 0.5%.
-
----
-
-## 12. Production AWS Environment Cost Estimation
-
-### 12.1 Cost Breakdown (AWS Tokyo Region `ap-northeast-1`) for 1,000,000 interactions/month
-
-| AWS Service | Unit Cost Metric | Estimated Monthly Cost (USD) | Estimated Monthly Cost (JPY @ 150/$) |
+| AWS Service | Unit Cost Metric | Monthly Cost (USD) | Monthly Cost (JPY @ 150/$) |
 |---|---|---|---|
 | **Amazon Bedrock (Nova Lite)** | 1M Reqs (500 in / 300 out tokens) | $120.00 | ¥18,000 |
-| **AWS ECS Fargate** | 4 Tasks (2 vCPU, 4GB RAM) Multi-AZ | $180.00 | ¥27,000 |
+| **AWS ECS Fargate** | 4 Tasks (1 vCPU, 2GB RAM) Multi-AZ | $180.00 | ¥27,000 |
 | **Amazon OpenSearch Serverless**| 2 OCU (Vector Search Index) | $140.00 | ¥21,000 |
 | **Amazon S3** | Audit logs with Object Lock (50GB) | $15.00 | ¥2,250 |
 | **AWS KMS** | 2 CMK Keys + API requests | $2.00 | ¥300 |

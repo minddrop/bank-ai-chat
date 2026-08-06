@@ -19,260 +19,320 @@
 | Public Subnet 1A | `ap-northeast-1a` | `10.100.1.0/24` | Internet Gateway (IGW) | Application Load Balancer (ALB), NAT Gateway 1A |
 | Public Subnet 1C | `ap-northeast-1c` | `10.100.2.0/24` | Internet Gateway (IGW) | Application Load Balancer (ALB), NAT Gateway 1C |
 | Public Subnet 1D | `ap-northeast-1d` | `10.100.3.0/24` | Internet Gateway (IGW) | Application Load Balancer (ALB), NAT Gateway 1D |
-| Private App Subnet 1A | `ap-northeast-1a` | `10.100.10.0/23` | NAT Gateway 1A / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Dual Control Planes) |
-| Private App Subnet 1C | `ap-northeast-1c` | `10.100.12.0/23` | NAT Gateway 1C / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Dual Control Planes) |
-| Private App Subnet 1D | `ap-northeast-1d` | `10.100.14.0/23` | NAT Gateway 1D / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Dual Control Planes) |
-| Isolated Data Subnet 1A | `ap-northeast-1a` | `10.100.20.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Salted Token Vault, KMS Endpoint |
-| Isolated Data Subnet 1C | `ap-northeast-1c` | `10.100.21.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Salted Token Vault, Bedrock Endpoint |
-| Isolated Data Subnet 1D | `ap-northeast-1d` | `10.100.22.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Salted Token Vault, S3 Gateway Endpoint |
+| Private App Subnet 1A | `ap-northeast-1a` | `10.100.10.0/23` | NAT Gateway 1A / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Control Planes) |
+| Private App Subnet 1C | `ap-northeast-1c` | `10.100.12.0/23` | NAT Gateway 1C / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Control Planes) |
+| Private App Subnet 1D | `ap-northeast-1d` | `10.100.14.0/23` | NAT Gateway 1D / Transit Gateway | ECS Fargate Tasks (FastAPI Backend, Control Planes) |
+| Isolated Data Subnet 1A | `ap-northeast-1a` | `10.100.20.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, KMS Endpoint, Secrets Manager |
+| Isolated Data Subnet 1C | `ap-northeast-1c` | `10.100.21.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, Bedrock Endpoint, S3 Endpoint |
+| Isolated Data Subnet 1D | `ap-northeast-1d` | `10.100.22.0/24` | Local VPC Only / VPC Endpoints | OpenSearch Serverless, CloudWatch Logs Endpoint |
 
-### 1.2 AWS PrivateLink & Interface VPC Endpoints
-To satisfy FISC data isolation mandates, network traffic to AWS services MUST NOT cross the public Internet. The following Interface/Gateway endpoints are deployed inside the Isolated Data Subnets:
+### 1.2 Route Tables & NAT Gateway Allocation
+- **Public Route Table (`rtb-public`)**: Associated with Public Subnets (1A, 1C, 1D). Route `0.0.0.0/0` -> Internet Gateway (`igw-xxxx`).
+- **Private App Route Tables (`rtb-private-1a`, `rtb-private-1c`, `rtb-private-1d`)**: Associated with Private App Subnets. Route `0.0.0.0/0` -> Corresponding NAT Gateway in matching AZ (`nat-1a`, `nat-1c`, `nat-1d`).
+- **Isolated Data Route Table (`rtb-isolated`)**: Associated with Isolated Data Subnets. **Zero outbound default route (`0.0.0.0/0`)**. Traffic routes strictly inside VPC or to Interface VPC Endpoints (`vpce-xxxx`).
 
-- `com.amazonaws.ap-northeast-1.bedrock-runtime`: Amazon Bedrock (Nova Lite Model `amazon.nova-lite-v1:0`)
-- `com.amazonaws.ap-northeast-1.aoss`: Amazon OpenSearch Serverless Vector Store Engine
-- `com.amazonaws.ap-northeast-1.kms`: AWS Key Management Service (Customer Managed Keys)
-- `com.amazonaws.ap-northeast-1.s3` (Gateway Endpoint): Encryption Audit Bucket & FAQ JSON storage
-- `com.amazonaws.ap-northeast-1.ecr.api` & `.dkr`: Amazon Elastic Container Registry
-- `com.amazonaws.ap-northeast-1.logs`: Amazon CloudWatch Logs for audit trail streaming
-- `com.amazonaws.ap-northeast-1.secretsmanager`: Secrets Manager for database & API tokens
+### 1.3 VPC Flow Logs Configuration
+- **Destination**: S3 Log Archive Bucket `japan-bank-ai-vpc-flowlogs-ap-northeast-1`.
+- **Traffic Type**: `ALL` (Accept and Reject).
+- **Log Format**: `${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}`.
+- **Encryption**: KMS CMK `alias/bank-ai-cmk`.
 
----
+### 1.4 Application Load Balancer (ALB) & Security Groups
+- **Listeners**:
+  - Port 80 (HTTP): Redirects `HTTP 301` to Port 443 (HTTPS).
+  - Port 443 (HTTPS): Uses SSL Policy `ELBSecurityPolicy-TLS13-1-2-2021-06` with ACM Certificate `arn:aws:acm:ap-northeast-1:123456789012:certificate/xxxx`.
+  - Idle Timeout: `300 seconds` (to support long-lived SSE connections).
+- **Health Check Configuration**:
+  - Path: `/health`
+  - Interval: `15 seconds`
+  - Timeout: `5 seconds`
+  - Healthy Threshold: `2`
+  - Unhealthy Threshold: `3`
+  - Success Code: `200`
 
-## 2. In-VPC Dual Control Plane Architecture & Microservice Pipeline
+### 1.5 Security Group Ingress / Egress Rules Matrix
 
-```
-                    ┌─────────────────────────────────────────────────────────────┐
-                    │ Client Browser / Internet Banking Web Portal / Mobile App   │
-                    └──────────────────────────────┬──────────────────────────────┘
-                                                   │ HTTPS / TLS 1.3 (Port 443)
-                                                   ▼
-                    ┌─────────────────────────────────────────────────────────────┐
-                    │ AWS WAF (Managed OWASP + FISC Rate Rules + Rate Limiters)   │
-                    └──────────────────────────────┬──────────────────────────────┘
-                                                   │
-                                                   ▼
-                    ┌─────────────────────────────────────────────────────────────┐
-                    │ Application Load Balancer (ALB) Multi-AZ                     │
-                    └──────────────────────────────┬──────────────────────────────┘
-                                                   │ Private App Subnet (Multi-AZ)
-                                                   ▼
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ Amazon ECS Fargate Container Service (`src/backend`)                                                     │
-│                                                                                                         │
-│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 1. INPUT CONTROL PLANE & INLINE DLP (`src/control_plane/input_guardrail.py`) [P95 <= 45ms]         │  │
-│  │    - Unicode NFC Normalization & Zero-Width Space (`U+200B`) / Cipher Stripper                     │  │
-│  │    - Direct & Indirect Prompt Injection Classifier (OWASP LLM01/02)                              │  │
-│  │    - Multi-Pattern PII Redactor & Salted Token Vault (`[TOKEN_ACCT_a1b2c3d4]`) (APPI / PCI-DSS 4.0)│  │
-│  │    - Payload Bounds (1,000 chars / 500 tokens) & Executable Code / SSRF Sanitizer                 │  │
-│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                    │ Sanitized Prompt Payload                           │
-│                                                    ▼                                                    │
-│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 2. CONTEXT RETRIEVAL LAYER & RAG RBAC (`src/rag`) [P95 <= 85ms]                                   │  │
-│  │    - OpenSearch Serverless Vector Search with Tier-Based RBAC Metadata Filter                      │  │
-│  │    - Core Banking Integration (Read-Only OAuth 2.0 mTLS Mock Interface)                           │  │
-│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                    │ Context Payload                                    │
-│                                                    ▼                                                    │
-│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 3. INFERENCE LAYER (`src/llm/bedrock_nova.py`) [P95 <= 450ms TTFT]                                │  │
-│  │    - Amazon Bedrock Runtime via Private VPC Interface Endpoint                                   │  │
-│  │    - Model: `amazon.nova-lite-v1:0` (Tokyo `ap-northeast-1`)                                      │  │
-│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                    │ Raw LLM Generated Output                           │
-│                                                    ▼                                                    │
-│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 4. OUTPUT CONTROL PLANE & POST-DLP (`src/control_plane/output_guardrail.py`) [P95 <= 50ms]        │  │
-│  │    - Natural Language Inference (NLI) Entailment Grounding Verification (Entailment Score >= 0.85) │  │
-│  │    - Outbound PII Reflection Scanner & Financial Numeric Value Integrity Check                    │  │
-│  │    - FIEA Article 38 Prohibited Financial Solicitation Filter & Legal Disclaimer Appender         │  │
-│  └─────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                    │ Validated Response + Metadata                      │
-│                                                    ▼                                                    │
-│  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 5. FISC AUDIT LOGGER & TELEMETRY (`src/control_plane/fisc_audit_logger.py`) [P95 <= 12ms Async]   │  │
-│  │    - Cryptographic SHA-256 Signature Assembly & Security Event CloudWatch Metric Publisher       │  │
-│  │    - Immutable Stream to S3 Object Lock (10-Year WORM Compliance Mode)                           │  │
-│  └───────────────────────────────────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-```
+| Security Group ID | Source / Target | Protocol / Port | Purpose / Note |
+|---|---|---|---|
+| `sg-alb` (Public ALB) | `0.0.0.0/0` | TCP 443 (HTTPS) | Inbound HTTPS traffic from Internet / Portal |
+| `sg-alb` (Public ALB) | `0.0.0.0/0` | TCP 80 (HTTP) | Inbound HTTP traffic (Redirected to 443) |
+| `sg-alb` (Public ALB) | `sg-ecs-tasks` | TCP 8000 | Egress to ECS Fargate tasks |
+| `sg-ecs-tasks` (ECS App) | `sg-alb` | TCP 8000 | Inbound HTTP from ALB |
+| `sg-ecs-tasks` (ECS App) | `sg-vpc-endpoints` | TCP 443 (HTTPS) | Egress to AWS PrivateLink Endpoints |
+| `sg-ecs-tasks` (ECS App) | `sg-opensearch` | TCP 443 (HTTPS) | Egress to OpenSearch Serverless Collection |
+| `sg-vpc-endpoints` | `sg-ecs-tasks` | TCP 443 (HTTPS) | Inbound HTTPS from ECS Tasks to VPC Endpoints |
+| `sg-opensearch` | `sg-ecs-tasks` | TCP 443 (HTTPS) | Inbound HTTPS from ECS Tasks to AOSS Engine |
 
 ---
 
-## 3. ECS Fargate Compute & Scaling Specifications
+## 2. ECS Fargate Compute & Task Specifications
 
-### 3.1 Task Definition Specification
-- **Task CPU**: `1024` (1 vCPU)
-- **Task Memory**: `2048` (2 GB RAM)
-- **Launch Type**: `FARGATE`
-- **Network Mode**: `awsvpc`
-- **Operating System**: Linux (`ARM64` / AWS Graviton2 for high performance & 20% cost efficiency)
+### 2.1 Task Definition JSON Schema
 
-### 3.2 Auto-scaling Policy
-- **Target Tracking Scaling**:
-  - `ECSServiceAverageCPUUtilization`: Target value `70%`
-  - `ECSServiceAverageMemoryUtilization`: Target value `75%`
-  - `ALBRequestCountPerTarget`: Target `1,000` requests per minute
-- **Capacity Limits**:
-  - Minimum Tasks: `3` (1 task per Availability Zone)
-  - Maximum Tasks: `30` (Handles peak dividend payout days and campaign surges)
-
----
-
-## 4. Storage, Token Vault, Vector DB & Audit Logging Specifications
-
-### 4.1 In-VPC KMS Salted Token Vault
-- **Encryption Engine**: AWS KMS Customer Managed Key (`aws:kms`) with AES-256 GCM encryption.
-- **Vault Retention**: Ephemeral in-memory database bound strictly to request lifecycle.
-- **Token Format**: Cryptographically salted UUID strings (`[TOKEN_ACCT_a1b2c3d4]`).
-- **Session Zeroization**: Conversation buffers zeroized within $< 10\text{ ms}$ upon session termination or profile switch per GLBA and NYDFS rules.
-
-### 4.2 Amazon OpenSearch Serverless Vector Engine
-- **Collection Type**: `VECTORSEARCH`
-- **Encryption**: KMS Customer Managed Key (CMK)
-- **Network Access**: Private VPC Endpoint Access Only
-- **Vector Metric**: Cosine Similarity / HNSW (Hierarchical Navigable Small World)
-- **Index Schemas**: Rakuten Bank FAQ 10,000+ chunk embeddings (1,536-dim vectors)
-- **RBAC Filtering**: Metadata pre-filtering on customer authorization tiers (`REGULAR`, `PREMIUM`, `VIP`, `SUPER_VIP`).
-
-### 4.3 S3 Bucket & FISC Object Lock Compliance
-- **Audit Bucket Name**: `japan-bank-ai-audit-log-ap-northeast-1`
-- **Object Lock Configuration**:
-  - Mode: `COMPLIANCE` (Cannot be deleted or modified by any user including AWS Root Account)
-  - Retention Period: `3650 days` (10 Years per Banking Act & FISC Standards)
-- **Encryption**: `aws:kms` with CMK ARN `arn:aws:kms:ap-northeast-1:123456789012:key/bank-ai-audit-key`
-- **Lifecycle Policy**: Glacier Flexible Retrieval after 90 days; Glacier Deep Archive after 365 days.
-
----
-
-## 5. Security, IAM & Identity Specifications
-
-### 5.1 IAM Roles & OIDC GitHub Actions Integration
-- **ECS Task Execution Role (`BankAiEcsTaskExecutionRole`)**:
-  - Attached Policies: `AmazonECSTaskExecutionRolePolicy`, `CustomKmsDecryptPolicy`, `CustomSecretsManagerReadPolicy`
-- **ECS Task Role (`BankAiEcsTaskRole`)**:
-  - Privileges restricted to Bedrock `bedrock:InvokeModel` on `amazon.nova-lite-v1:0`, OpenSearch AOSS search access, and CloudWatch Log PutEvents.
-- **GitHub Actions OIDC Role (`GitHubActionsDeployRole`)**:
-  - Trust policy bound strictly to repository `minddrop/bank-ai-chat` and branch `refs/heads/main`.
-  - Permissions restricted to ECR image pushing and ECS task definition updating in `ap-northeast-1`.
-
----
-
-## 6. Hybrid Cloud Architecture (Direct Connect & TGW)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ On-Premise Core Banking Data Center (東京勘定系センター)      │
-│  - Core Mainframe (勘定系 DB - Read Only)                   │
-│  - PII Vault & Customer Master DB                           │
-│  - Direct Connect Customer Gateway (CGW)                    │
-└──────────────┬──────────────────────────────┬───────────────┘
-               │ Dedicated 10 Gbps DX Link    │ Backup IPsec VPN
-               ▼                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ AWS Direct Connect Location (Equinix TY3 / TY11 Tokyo)       │
-└──────────────┬──────────────────────────────┬───────────────┘
-               │ Direct Connect Gateway (DXGW)│
-               ▼                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ AWS Transit Gateway (TGW) (ap-northeast-1)                  │
-│  - Route Table: Isolation & Inspection Routing              │
-└──────────────┬──────────────────────────────────────────────┘
-               │ TGW Attachment
-               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Bank AI System VPC (10.100.0.0/16)                          │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 7. Infrastructure as Code (Terraform IaC Example Snippet)
-
-```hcl
-terraform {
-  required_version = ">= 1.5.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+```json
+{
+  "family": "bank-ai-assistant-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "runtimePlatform": {
+    "cpuArchitecture": "ARM64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "arn:aws:iam::123456789012:role/BankAiEcsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::123456789012:role/BankAiEcsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "bank-ai-backend",
+      "image": "123456789012.dkr.ecr.ap-northeast-1.amazonaws.com/bank-ai-chat:latest",
+      "essential": true,
+      "user": "10001:10001",
+      "readonlyRootFilesystem": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "AWS_REGION", "value": "ap-northeast-1" },
+        { "name": "BEDROCK_MODEL_ID", "value": "amazon.nova-lite-v1:0" },
+        { "name": "EMBEDDING_MODEL_ID", "value": "amazon.titan-embed-text-v2:0" },
+        { "name": "AOSS_ENDPOINT", "value": "https://xxxx.ap-northeast-1.aoss.amazonaws.com" },
+        { "name": "KMS_KEY_ALIAS", "value": "alias/bank-ai-cmk" },
+        { "name": "AUDIT_S3_BUCKET", "value": "japan-bank-ai-audit-log-ap-northeast-1" },
+        { "name": "LOG_LEVEL", "value": "INFO" },
+        { "name": "GUARDRAIL_STRICT_MODE", "value": "true" }
+      ],
+      "secrets": [
+        {
+          "name": "VAULT_HMAC_SALT",
+          "valueFrom": "arn:aws:secretsmanager:ap-northeast-1:123456789012:secret:bank-ai/vault-hmac-salt:salt::"
+        }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bank-ai-assistant",
+          "awslogs-region": "ap-northeast-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
     }
-  }
-}
-
-provider "aws" {
-  region = "ap-northeast-1"
-  default_tags {
-    tags = {
-      Environment = "Production"
-      Project     = "JapaneseBankAiAssistant"
-      Compliance  = "FISC-APPI-FSA-PCI-GLBA-NYDFS"
-    }
-  }
-}
-
-# 1. FISC Encrypted Audit S3 Bucket with Object Lock
-resource "aws_s3_bucket" "audit_log_bucket" {
-  bucket              = "japan-bank-ai-audit-log-ap-northeast-1"
-  object_lock_enabled = true
-}
-
-resource "aws_s3_bucket_object_lock_configuration" "audit_lock" {
-  bucket = aws_s3_bucket.audit_log_bucket.id
-
-  rule {
-    default_retention {
-      mode = "COMPLIANCE"
-      days = 3650
-    }
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "audit_crypto" {
-  bucket = aws_s3_bucket.audit_log_bucket.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.bank_ai_cmk.arn
-      sse_algorithm     = "aws:kms"
-    }
-  }
-}
-
-# 2. AWS KMS Customer Managed Key
-resource "aws_kms_key" "bank_ai_cmk" {
-  description             = "Japanese Major Bank AI Control Plane CMK Key"
-  deletion_window_in_days = 30
-  enable_key_rotation     = true
-}
-
-# 3. Amazon Bedrock VPC Interface Endpoint
-resource "aws_vpc_endpoint" "bedrock_runtime" {
-  vpc_id              = "vpc-0123456789abcdef0"
-  service_name        = "com.amazonaws.ap-northeast-1.bedrock-runtime"
-  vpc_endpoint_type   = "Interface"
-  private_dns_enabled = true
-  subnet_ids          = ["subnet-0a1b2c3d4e5f6g7h8", "subnet-0i9j8h7g6f5e4d3c2"]
-  security_group_ids  = ["sg-0123456789abcdef0"]
+  ]
 }
 ```
 
 ---
 
-## 8. Summary Compliance Matrix
+## 3. Storage, Database & OpenSearch Serverless Policies
 
-| Regulation / Standard | AWS Implementation Mechanism | Verification Status |
-|---|---|---|
-| **APPI (個人情報保護法)** | In-VPC Input DLP Multi-Pattern Masking + KMS Salted Token Vault | Verified (Zero PII transmitted to LLM) |
-| **FSA AI Guidelines** | NLI Entailment Grounding ($\ge 0.85$) + SHA-256 FISC Audit Trail | Verified |
-| **FIEA (金融商品取引法)** | Output Control Plane Investment Solicitation Filter (Art 38) | Verified |
-| **FISC Security Standards** | AWS Tokyo `ap-northeast-1` residency + KMS AES-256 + 10-Yr S3 WORM Lock | Verified |
-| **Banking Act (銀行法)** | Informational boundary + Mandatory Japanese legal disclaimer injection | Verified |
-| **PCI-DSS 4.0** | 16-digit PAN Masking (Req 3.3/3.4) + WAF OWASP Application Shield (Req 6.4.3) | Verified |
-| **GLBA Safeguards Rule** | KMS CMK NPI Encryption (§ 314.4) + Zero-Trust Memory Isolation | Verified |
-| **CFPB AI Chatbot Guidance** | Grounding Entailment prevents financial hallucination; Human Escalation UI | Verified |
-| **SR 11-7 Model Risk** | Automated daily drift tracking, refusal rate analytics, latency distribution | Verified |
-| **ISO 42001 / AIUC-1** | Direct/Indirect Prompt Injection Classifier + Unicode NFC Normalization | Verified |
-| **NYDFS Part 500** | SHA-256 Audit Trail (500.06) + Step-Up MFA Boundary (500.12) | Verified |
+### 3.1 Amazon OpenSearch Serverless (AOSS) Policies
+
+#### Encryption Policy (`aoss-security-policy-encryption`)
+```json
+{
+  "Rules": [
+    {
+      "ResourceType": "collection",
+      "Resource": ["collection/bank-ai-faq-vectors"]
+    }
+  ],
+  "AWSOwnedKey": false,
+  "KmsARN": "arn:aws:kms:ap-northeast-1:123456789012:key/bank-ai-cmk"
+}
+```
+
+#### Network Policy (`aoss-security-policy-network`)
+```json
+[
+  {
+    "Rules": [
+      {
+        "ResourceType": "collection",
+        "Resource": ["collection/bank-ai-faq-vectors"]
+      },
+      {
+        "ResourceType": "dashboard",
+        "Resource": ["collection/bank-ai-faq-vectors"]
+      }
+    ],
+    "AllowFromVPCEndpoints": ["vpce-0123456789abcdef0"],
+    "AllowPublicAccess": false
+  }
+]
+```
+
+#### Data Access Policy (`aoss-access-policy`)
+```json
+[
+  {
+    "Rules": [
+      {
+        "ResourceType": "index",
+        "Resource": ["index/bank-ai-faq-vectors/*"],
+        "Permission": [
+          "aoss:CreateIndex",
+          "aoss:UpdateIndex",
+          "aoss:DescribeIndex",
+          "aoss:ReadDocument",
+          "aoss:WriteDocument"
+        ]
+      }
+    ],
+    "Principal": [
+      "arn:aws:iam::123456789012:role/BankAiEcsTaskRole"
+    ]
+  }
+]
+```
+
+### 3.2 S3 Audit Bucket Policy Enforcing Encryption & TLS 1.3
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EnforceTLS13Only",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::japan-bank-ai-audit-log-ap-northeast-1",
+        "arn:aws:s3:::japan-bank-ai-audit-log-ap-northeast-1/*"
+      ],
+      "Condition": {
+        "NumericLessThan": {
+          "s3:TlsVersion": "1.3"
+        }
+      }
+    },
+    {
+      "Sid": "EnforceKMSCMKEncryption",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::japan-bank-ai-audit-log-ap-northeast-1/*",
+      "Condition": {
+        "StringNotEquals": {
+          "s3:x-amz-server-side-encryption": "aws:kms"
+        }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## 4. Complete IAM Roles & KMS Policies
+
+### 4.1 ECS Task Runtime Role (`BankAiEcsTaskRole`) Policy
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BedrockNovaLiteInvoke",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream"
+      ],
+      "Resource": "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-lite-v1:0"
+    },
+    {
+      "Sid": "TitanEmbeddingsInvoke",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.titan-embed-text-v2:0"
+    },
+    {
+      "Sid": "AossDataAccess",
+      "Effect": "Allow",
+      "Action": "aoss:APIAccessAll",
+      "Resource": "arn:aws:aoss:ap-northeast-1:123456789012:collection/*"
+    },
+    {
+      "Sid": "S3AuditLogPut",
+      "Effect": "Allow",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::japan-bank-ai-audit-log-ap-northeast-1/*"
+    },
+    {
+      "Sid": "KmsCryptographicOperations",
+      "Effect": "Allow",
+      "Action": [
+        "kms:GenerateDataKey",
+        "kms:Decrypt",
+        "kms:Encrypt"
+      ],
+      "Resource": "arn:aws:kms:ap-northeast-1:123456789012:key/bank-ai-cmk"
+    }
+  ]
+}
+```
+
+### 4.2 GitHub Actions OIDC Deploy Role Policy
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ECRAuthAndPush",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcsTaskDefinitionUpdate",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RegisterTaskDefinition",
+        "ecs:UpdateService",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PassRoleToEcs",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::123456789012:role/BankAiEcsTaskExecutionRole",
+        "arn:aws:iam::123456789012:role/BankAiEcsTaskRole"
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 5. Observability & Alarm Targets
+
+| Alarm Name | Metric Name | Namespace | Statistic | Threshold | Evaluation | Priority | Notification |
+|---|---|---|---|---|---|---|---|
+| `BankAi-P95LatencyHigh` | `TargetResponseTime` | `AWS/ApplicationELB` | P95 | `> 0.800 s` | 2 periods (5 mins) | P2 High | SNS -> DevOps Pager |
+| `BankAi-5xxErrorSpike` | `HTTPCode_Target_5XX_Count` | `AWS/ApplicationELB` | Sum | `> 5 reqs` | 1 period (1 min) | P1 Critical | SNS -> SRE Page |
+| `BankAi-GuardrailBlockSurge` | `GuardrailBlockCount` | `BankAi/ControlPlane` | Sum | `> 10 blocks` | 1 period (5 mins) | P2 Security | SNS -> SOC Alert |
+| `BankAi-GroundingViolation` | `GroundingViolationCount` | `BankAi/ControlPlane` | Sum | `> 5 count` | 1 period (5 mins) | P2 High | SNS -> Model Governance |
+| `BankAi-AuditS3WriteError` | `S3AuditWriteError` | `BankAi/Audit` | Sum | `> 0 errors` | 1 period (1 min) | P0 Blocker | SNS -> Immediate Page |
