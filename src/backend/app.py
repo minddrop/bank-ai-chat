@@ -85,6 +85,11 @@ def health_check():
         "core_banking_status": "CONNECTED"
     }
 
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+@app.get("/favicon.ico")
+def suppress_dev_logs():
+    return {}
+
 @app.get("/api/customers")
 def list_customers():
     return core_banking_service.get_all_customers()

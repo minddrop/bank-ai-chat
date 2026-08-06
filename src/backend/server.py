@@ -71,6 +71,10 @@ class BankPortalRequestHandler(SimpleHTTPRequestHandler):
             })
             return
 
+        if path in ("/.well-known/appspecific/com.chrome.devtools.json", "/favicon.ico"):
+            self._send_json({})
+            return
+
         if path in ("/api/customers", "/api/core/customers"):
             self._send_json(core_banking_service.get_all_customers())
             return
