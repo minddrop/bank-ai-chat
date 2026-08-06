@@ -69,7 +69,9 @@ bank-ai-chat/
 - **FISC安全対策基準**: 改ざん防止監査ログおよびKMS暗号化の適用。
 - **グローバル金融基準適合**: **PCI-DSS 4.0**、**GLBA**、**CFPB AI指導原則**、**SR 11-7**、**ISO 42001/AIUC-1**、**NYDFS Part 500** に対するトレサビリティを網羅。[エンタープライズDLP・セキュリティ仕様書](docs/security_dlp_guardrails_requirements.md) および [ADR 0009](docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md) を参照。
 - **コンピュート・アーキテクチャ & ストリーミングガバナンス**: AWS ECS FargateとAWS Lambdaの比較評価を実施し、SSEストリーミング応答の無中断提供、API Gatewayの29秒タイムアウト制限回避、コールドスタート排除、および3層VPC FISC安全対策基準への適合を検証。[ADR 0011](docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) および [ADR 0013](docs/adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) を参照。
-- **In-VPC PIIソルト付きトークン化 & ステップアップ認証境界**: 個人情報保護法に基づくPIIトークン化ヴォールト ([ADR 0012](docs/adr/0012-in-vpc-salted-tokenization-vault.md)) および 銀行法に基づくトランザクション型操作のステップアップ認証境界 ([ADR 0014](docs/adr/0014-zero-trust-step-up-authentication-boundary.md))。詳細は [要件定義仕様書 (Requirements Definition)](docs/requirements_definition.md) を参照。
+- **In-VPC PIIソルト付きトークン化 & ステップアップ認証境界**: 個人情報保護法に基づくPIIトークン化ヴォールト ([ADR 0012](docs/adr/0012-in-vpc-salted-tokenization-vault.md)) および 銀行法に基づくトランザクション型操作のステップアップ認証境界 ([ADR 0014](docs/adr/0014-zero-trust-step-up-authentication-boundary.md))。
+- **インフラストラクチャコード化 & 本番運用準備**: OpenSearch Serverlessネットワーク隔離・1024次元Titan v2標準化 ([ADR 0015](docs/adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md))、Terraform IaCリモートステート管理 ([ADR 0016](docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md))、最小権限IAMロール設計 ([ADR 0017](docs/adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md))、および本番CloudWatch監視アラート目標 ([ADR 0018](docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md))。詳細は [要件定義仕様書 (Requirements Definition)](docs/requirements_definition.md) および [AWS詳細設計仕様書](docs/aws_detailed_design_specification.md) を参照。
+
 
 ---
 
