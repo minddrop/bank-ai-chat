@@ -68,9 +68,12 @@ bank-ai-chat/
 - **FSA AI Guidelines & FIEA (金融商品取引法)**: Automated grounding checks and financial advice restrictions.
 - **FISC Security Standards (FISC安全対策基準)**: Tamper-evident audit logging and KMS encryption.
 - **Global Financial Standards**: Full traceability against **PCI-DSS 4.0**, **GLBA**, **CFPB AI Guidance**, **SR 11-7**, **ISO 42001/AIUC-1**, and **NYDFS Part 500**. See [Enterprise Security, DLP & Compliance Specification](docs/security_dlp_guardrails_requirements.md) and [ADR 0009](docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md).
+- **Compute Architecture & Streaming Governance**: Re-evaluated container compute (AWS ECS Fargate) vs. serverless (AWS Lambda) ensuring un-truncated SSE response streaming, 29-second proxy limit evasion, zero cold starts, and 3-tier VPC FISC compliance. See [ADR 0011](docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) and [ADR 0013](docs/adr/0013-sse-streaming-and-guardrail-buffer-architecture.md).
+- **In-VPC Salted PII Tokenization & Step-Up Auth**: Tokenized PII vaulting under APPI ([ADR 0012](docs/adr/0012-in-vpc-salted-tokenization-vault.md)) and legal boundary enforcement under the Japanese Banking Act ([ADR 0014](docs/adr/0014-zero-trust-step-up-authentication-boundary.md)). See detailed [Enterprise Requirements Definition](docs/requirements_definition.md).
 
 ---
 
 ## 📝 Documentation Maintenance Policy
 
 As defined in [`GEMINI.md`](GEMINI.md), **dual-language (English & Japanese) documentation maintenance is specifically restricted to the README files** (`README.md` and `README_JA.md`). All other internal documentation and ADRs remain in their designated canonical languages.
+
