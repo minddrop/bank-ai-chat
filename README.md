@@ -67,6 +67,7 @@ bank-ai-chat/
 - **APPI (個人情報保護法)**: Zero PII transmission to external LLM endpoints.
 - **FSA AI Guidelines & FIEA (金融商品取引法)**: Automated grounding checks and financial advice restrictions.
 - **FISC Security Standards (FISC安全対策基準)**: Tamper-evident audit logging and KMS encryption.
+- **Global Financial Standards**: Full traceability against **PCI-DSS 4.0**, **GLBA**, **CFPB AI Guidance**, **SR 11-7**, **ISO 42001/AIUC-1**, and **NYDFS Part 500**. See [Enterprise Security, DLP & Compliance Specification](docs/security_dlp_guardrails_requirements.md) and [ADR 0009](docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md).
 
 ---
 

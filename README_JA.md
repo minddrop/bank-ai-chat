@@ -67,6 +67,7 @@ bank-ai-chat/
 - **個人情報保護法 (APPI)**: LLMモデルエンドポイントへの生のPII流出を完全遮断。
 - **金融庁 (FSA) AIガイドライン & 金融商品取引法 (FIEA)**: 回答の根拠（Grounding）検証および投資助言行為の禁止。
 - **FISC安全対策基準**: 改ざん防止監査ログおよびKMS暗号化の適用。
+- **グローバル金融基準適合**: **PCI-DSS 4.0**、**GLBA**、**CFPB AI指導原則**、**SR 11-7**、**ISO 42001/AIUC-1**、**NYDFS Part 500** に対するトレサビリティを網羅。[エンタープライズDLP・セキュリティ仕様書](docs/security_dlp_guardrails_requirements.md) および [ADR 0009](docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md) を参照。
 
 ---
 
