@@ -101,7 +101,19 @@ async function handleLoginSubmit(event) {
   }
 }
 
-function loginAsCustomer(customer) {
+async function loginAsCustomer(customer) {
+  // If accounts array is missing, fetch full detailed profile
+  if (!customer.accounts || customer.accounts.length === 0) {
+    try {
+      const res = await fetch(`/api/core/customers/${customer.customer_id}`);
+      if (res.ok) {
+        customer = await res.json();
+      }
+    } catch (e) {
+      console.warn('Could not fetch full profile:', e);
+    }
+  }
+
   currentCustomer = customer;
   localStorage.setItem('user_portal_customer_id', customer.customer_id);
 

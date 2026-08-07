@@ -18,8 +18,19 @@ class CoreBankingService:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM customers ORDER BY customer_id ASC")
         rows = cursor.fetchall()
+
+        customers = []
+        for row in rows:
+            cust_dict = dict(row)
+            customer_id = cust_dict["customer_id"]
+            cursor.execute("SELECT * FROM accounts WHERE customer_id = ?", (customer_id,))
+            cust_dict["accounts"] = [dict(acc) for acc in cursor.fetchall()]
+            cursor.execute("SELECT * FROM transactions WHERE customer_id = ? ORDER BY date DESC, transaction_id DESC LIMIT 20", (customer_id,))
+            cust_dict["recent_transactions"] = [dict(tx) for tx in cursor.fetchall()]
+            customers.append(cust_dict)
+
         conn.close()
-        return [dict(row) for row in rows]
+        return customers
 
     def get_customer_profile(self, customer_id: str) -> Optional[Dict[str, Any]]:
         conn = get_db_connection(self.db_path)
