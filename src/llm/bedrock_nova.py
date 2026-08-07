@@ -12,9 +12,10 @@ SYSTEM_PROMPT_JAPANESE_BANK = (
     "あなたは日本の大手メガバンク「メガバンク日本銀行」の公式AIカスタマーアシスタントです。\n"
     "【行動指針】\n"
     "1. 丁寧で親切な日本語（敬語・丁寧語）で回答してください。\n"
-    "2. 提供された「口座情報」および「FAQ参照ナレッジ」に基づいて正確に回答してください。\n"
-    "3. 個別の株式や投資信託の銘柄購入を推奨する金融商品勧誘行為は絶対に行わないでください。\n"
-    "4. 個人情報（口座番号、暗証番号等）の入力は求めず、保護されたコンテキストのみを参照してください。"
+    "2. 提供された「お客様口座情報」および「FAQ参照ナレッジ」に基づいて正確に回答してください。\n"
+    "3. お客様が「ランクをあげる」「ステージアップ」「ランクアップ」「ハッピープログラム」について質問された場合は、必ず【お客様口座情報】に記載されたお客様の現在の預金残高（普通預金等）および会員ステージを参照し、上位ステージ達成に必要な具体的な差額（例: 「現在の普通預金残高 2,450,000円。スーパーVIP（3,000,000円以上）達成にはあと550,000円のご預金が必要です」など）を明確に計算・提案し、ランクアップのための具体的な手順（他行からの振込、定期預金からの振り替え等）をご案内してください。\n"
+    "4. 個別の株式や投資信託の銘柄購入を推奨する金融商品勧誘行為は絶対に行わないでください。\n"
+    "5. 個人情報（口座番号、暗証番号等）の入力は求めず、保護されたコンテキストのみを参照してください。"
 )
 
 class BedrockNovaLiteClient:
@@ -61,7 +62,8 @@ class BedrockNovaLiteClient:
         # Build context prompt
         context_str = ""
         if account_context:
-            context_str += f"\n【お客様口座情報 (マスキング済)】\n顧客ID: {account_context.get('customer_id')}\n名義: {account_context.get('name_kanji')} ({account_context.get('name_katakana')})\n"
+            tier_info = account_context.get('happy_program_stage') or account_context.get('customer_tier', 'REGULAR')
+            context_str += f"\n【お客様口座情報 (マスキング済)】\n顧客ID: {account_context.get('customer_id')}\n名義: {account_context.get('name_kanji')} ({account_context.get('name_katakana')})\n現在の会員ステージ・ランク: {tier_info}\n"
             acc_list = account_context.get('accounts', [])
             for acc in acc_list:
                 curr = acc.get('currency', 'JPY')
@@ -75,6 +77,15 @@ class BedrockNovaLiteClient:
                     amt_val = tx.get('amount', 0)
                     amt_str = f"{amt_val:,}円" if tx.get('currency', 'JPY') == "JPY" else f"{amt_val} {tx.get('currency')}"
                     context_str += f"  - {tx.get('date')} [{tx.get('type')}] {amt_str} ({tx.get('description')}) -> 差引残高: {tx.get('balance_after', 0):,}円\n"
+
+            context_str += (
+                "\n【ハッピープログラム（会員ステージランク基準＆優遇特典）】\n"
+                "・ベーシック: 残高10万円未満（他行振込手数料 0回/月、ATM手数料 1回/月）\n"
+                "・アドバンス: 残高10万円以上（他行振込手数料 1回無料/月、ATM手数料 2回無料/月）\n"
+                "・プレミアム: 残高50万円以上（他行振込手数料 2回無料/月、ATM手数料 5回無料/月）\n"
+                "・VIP: 残高100万円以上（他行振込手数料 3回無料/月、ATM手数料 5回無料/月）\n"
+                "・スーパーVIP: 残高300万円以上（他行振込手数料 3回無料/月、ATM手数料 7回無料/月、ポイント獲得3倍）\n"
+            )
 
         if rag_contexts:
             context_str += "\n【行内FAQ参照ナレッジ】\n"
