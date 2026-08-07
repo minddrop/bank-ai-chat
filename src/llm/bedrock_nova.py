@@ -84,7 +84,7 @@ class BedrockNovaLiteClient:
         full_user_content = f"{context_str}\n【お客様からの質問】\n{sanitized_prompt}"
 
         # 1. Try real Bedrock AWS invocation
-        if self.boto3_client and os.environ.get("AWS_ACCESS_KEY_ID"):
+        if self.boto3_client:
             try:
                 payload = {
                     "inferenceConfig": {"max_new_tokens": 512, "temperature": 0.3},
