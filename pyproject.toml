@@ -11,6 +11,7 @@ dependencies = [
     "boto3>=1.28.0",
     "requests>=2.28.0",
     "pytest>=7.0.0",
+    "botocore[crt]>=1.43.66",
 ]
 
 [build-system]
