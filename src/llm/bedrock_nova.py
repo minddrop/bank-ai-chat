@@ -153,19 +153,47 @@ class BedrockNovaLiteClient:
                         savings_bal = acc.get("balance", 0)
                         break
                 
-                # Default Super VIP threshold is 3,000,000 JPY
-                target_threshold = 3000000
-                delta = max(0, target_threshold - savings_bal)
-                
+                # Determine current stage and next tier target dynamically
+                if savings_bal >= 3000000:
+                    current_stage = "スーパーVIP"
+                    next_stage = None
+                    target_threshold = 3000000
+                    delta = 0
+                elif savings_bal >= 1000000:
+                    current_stage = "VIP"
+                    next_stage = "スーパーVIP"
+                    target_threshold = 3000000
+                    delta = target_threshold - savings_bal
+                elif savings_bal >= 500000:
+                    current_stage = "プレミアム"
+                    next_stage = "VIP"
+                    target_threshold = 1000000
+                    delta = target_threshold - savings_bal
+                elif savings_bal >= 100000:
+                    current_stage = "アドバンス"
+                    next_stage = "プレミアム"
+                    target_threshold = 500000
+                    delta = target_threshold - savings_bal
+                else:
+                    current_stage = "ベーシック"
+                    next_stage = "アドバンス"
+                    target_threshold = 100000
+                    delta = target_threshold - savings_bal
+
                 res = f"いつもメガバンク日本銀行をご利用いただきありがとうございます。\n"
-                res += f"{name}様の現在の普通預金残高は【{savings_bal:,} 円】です。\n\n"
-                if delta > 0:
-                    res += f"ハッピープログラムの最上位ステージ『スーパーVIP』（普通預金残高3,000,000円以上）を達成するには、あと【{delta:,} 円】のご預金が必要です。\n\n"
-                    res += "【スーパーVIP達成時の優遇特典】\n"
-                    res += "・他行振込手数料：毎月3回まで無料\n"
-                    res += "・ATM利用手数料：毎月7回まで無料\n"
-                    res += "・楽天ポイント獲得倍率：3倍\n\n"
-                    res += f"あと {delta:,} 円をご入金いただくか、他行からの振込受取等を組み合わせることで、翌月より自動的にスーパーVIPステージへランクアップいたします。"
+                res += f"{name}様の現在の普通預金残高は【{savings_bal:,.1f} 円】（現在のステージ：『{current_stage}』）です。\n\n"
+                if next_stage and delta > 0:
+                    res += f"上位ステージ『{next_stage}』（普通預金残高{target_threshold:,}円以上）を達成するには、あと【{delta:,.1f} 円】のご預金が必要です。\n\n"
+                    res += f"【{next_stage}達成時の主な優遇特典】\n"
+                    if next_stage == "スーパーVIP":
+                        res += "・他行振込手数料：毎月3回まで無料\n・ATM利用手数料：毎月7回まで無料\n・ポイント獲得倍率：3倍\n\n"
+                    elif next_stage == "VIP":
+                        res += "・他行振込手数料：毎月3回まで無料\n・ATM利用手数料：毎月5回まで無料\n\n"
+                    elif next_stage == "プレミアム":
+                        res += "・他行振込手数料：毎月2回まで無料\n・ATM利用手数料：毎月5回まで無料\n\n"
+                    else:
+                        res += "・他行振込手数料：毎月1回まで無料\n・ATM利用手数料：毎月2回まで無料\n\n"
+                    res += f"あと {delta:,.1f} 円をご入金いただくか、他行からの振込受取等を組み合わせることで、翌月より自動的に{next_stage}ステージへランクアップいたします。"
                 else:
                     res += "現在、すでに最高位ステージ『スーパーVIP』の条件を達成されています！\n"
                     res += "他行振込手数料月3回無料・ATM利用手数料月7回無料の優遇特典をご利用いただけます。"
