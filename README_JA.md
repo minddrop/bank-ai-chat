@@ -84,6 +84,13 @@ FastAPIを使わずに標準ライブラリの軽量HTTPサーバーを `uv` で
 uv run python3 src/backend/server.py
 ```
 
+#### モード D: コンテナ化スタック（Docker & Docker Compose）
+Dockerコンテナ上でアプリケーションスタックを構築・起動します（AWS ECS Fargateトポロジのエミュレーション）:
+```bash
+docker-compose up --build
+```
+
+
 ### 🌐 Webフロントエンド画面の表示
 サーバー起動後、ブラウザで以下のURLにアクセスします:
 **`http://localhost:8000`**

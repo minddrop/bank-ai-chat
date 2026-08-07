@@ -84,6 +84,13 @@ Alternatively, launch using the native Python standard library HTTP server with 
 uv run python3 src/backend/server.py
 ```
 
+#### Mode D: Containerized Stack (Docker & Docker Compose)
+Build and run the stack in a Docker container (emulating AWS ECS Fargate topology):
+```bash
+docker-compose up --build
+```
+
+
 ### 🌐 Accessing the Web Interface
 Once the server is running, open your web browser and navigate to:
 **`http://localhost:8000`**
