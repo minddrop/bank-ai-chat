@@ -4,8 +4,10 @@
 
 This guide details how developers can configure and run a **lightweight local LLM environment** (`Qwen2.5-0.5B`, `Qwen2.5-1.5B`, or `Gemma-2B`) for offline local development and testing of the Japanese Major Bank AI Customer Assistant.
 
+*(See [ADR-0019](file:///home/joe/src/bank-ai-chat/docs/adr/0019-local-llm-provider-and-fallback-architecture.md) for architectural specifications and fallback design)*
+
 > [!IMPORTANT]
-> **Deployment Scope Note**: The local LLM environment is designed **EXCLUSIVELY for local offline development, prototyping, and test suite execution**. The local LLM system will **NOT** be deployed to AWS production environments (where Amazon Bedrock Nova Lite `amazon.nova-lite-v1:0` is deployed under FISC compliance).
+> **Deployment Scope Note**: The local LLM environment is designed **EXCLUSIVELY for local offline development, prototyping, and test suite execution**. The local LLM system will **NOT** be deployed to AWS production environments (where Amazon Bedrock Nova Lite `amazon.nova-lite-v1:0` is deployed under FISC compliance per [ADR-0002](file:///home/joe/src/bank-ai-chat/docs/adr/0002-aws-bedrock-nova-lite-model-selection.md) and [ADR-0019](file:///home/joe/src/bank-ai-chat/docs/adr/0019-local-llm-provider-and-fallback-architecture.md)).
 
 ---
 

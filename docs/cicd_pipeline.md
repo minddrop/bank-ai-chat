@@ -7,6 +7,8 @@
 
 This document details the Continuous Integration & Continuous Deployment (CI/CD) strategy for the Japanese Major Bank AI Customer Assistant System. The pipeline enforces strict compliance testing, APPI PII redaction validation, security vulnerability scanning, Terraform IaC codification quality gates, zero-downtime deployments, and FISC audit compliance before any release reaches staging or production environments.
 
+*(See [ADR-0006](file:///home/joe/src/bank-ai-chat/docs/adr/0006-cicd-and-production-cost-estimation.md), [ADR-0016](file:///home/joe/src/bank-ai-chat/docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md), and [ADR-0017](file:///home/joe/src/bank-ai-chat/docs/adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md) for governing deployment & security decision records)*
+
 ---
 
 ## 2. CI/CD Architecture & Pipeline Stages
@@ -61,22 +63,22 @@ This document details the Continuous Integration & Continuous Deployment (CI/CD)
 - Executed automatically on every pull request.
 - Runs `python3 -m unittest discover -s tests -p "test_*.py"`.
 - Validates:
-  - PII Redaction (`1234567` account numbers, Katakana names, phone numbers).
-  - Grounding Score calculation algorithms.
-  - Prohibited financial investment advice blocking.
-  - Mock account JSON schema integrity.
+  - PII Redaction (`1234567` account numbers, Katakana names, phone numbers). *(See [ADR-0001](file:///home/joe/src/bank-ai-chat/docs/adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0012](file:///home/joe/src/bank-ai-chat/docs/adr/0012-in-vpc-salted-tokenization-vault.md))*
+  - Grounding Score calculation algorithms. *(See [ADR-0009](file:///home/joe/src/bank-ai-chat/docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md))*
+  - Prohibited financial investment advice blocking. *(See [ADR-0009](file:///home/joe/src/bank-ai-chat/docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md))*
+  - Mock account JSON schema integrity. *(See [ADR-0004](file:///home/joe/src/bank-ai-chat/docs/adr/0004-synthetic-japanese-account-schema.md))*
 
-### Stage 3: Infrastructure as Code (IaC) Quality Gates
+### Stage 3: Infrastructure as Code (IaC) Quality Gates *(See [ADR-0016](file:///home/joe/src/bank-ai-chat/docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md))*
 - **Format Verification**: `terraform fmt -check -recursive infrastructure/terraform`.
 - **Linting**: `tflint --recursive infrastructure/terraform`.
 - **Security & Compliance Policy Scan**: `checkov -d infrastructure/terraform --framework terraform` (Ensures zero unencrypted S3 buckets, public subnet database bindings, or wildcard IAM policies).
-- **Remote State Locking**: State managed via S3 bucket `bank-ai-tfstate-ap-northeast-1` and DynamoDB `bank-ai-tflock`.
+- **Remote State Locking**: State managed via S3 bucket `japan-bank-ai-tfstate-ap-northeast-1` and DynamoDB `japan-bank-ai-tfstate-lock`. *(See [ADR-0016](file:///home/joe/src/bank-ai-chat/docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md))*
 
 ### Stage 4: Container Security & SAST Scanning
 - **Static Application Security Testing (SAST)**: `bandit -r src/` for Python security flaws.
 - **Container Vulnerability Scan**: Trivy scan enforcing `severity HIGH,CRITICAL` zero-tolerance failure criteria.
 
-### Stage 5: Zero-Downtime Blue/Green Deployment
+### Stage 5: Zero-Downtime Blue/Green Deployment *(See [ADR-0006](file:///home/joe/src/bank-ai-chat/docs/adr/0006-cicd-and-production-cost-estimation.md), [ADR-0011](file:///home/joe/src/bank-ai-chat/docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md), [ADR-0017](file:///home/joe/src/bank-ai-chat/docs/adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md))*
 - **Authentication**: Short-lived AWS OIDC identity federation via `GitHubActionsDeployRole`.
 - **Deployment Strategy**: AWS ECS Fargate Blue/Green deployment with 10% canary traffic shift for 10 minutes. If 5xx error rate exceeds 0.5%, automatic rollback triggers immediately.
 

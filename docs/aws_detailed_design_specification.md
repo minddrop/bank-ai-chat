@@ -10,6 +10,8 @@
 
 ## 1. Network Topology & VPC Architecture
 
+*(See [ADR-0005](file:///home/joe/src/bank-ai-chat/docs/adr/0005-hybrid-cloud-and-aws-poc-architecture.md) and [ADR-0007](file:///home/joe/src/bank-ai-chat/docs/adr/0007-production-aws-detailed-design-specification.md) for architectural trade-off analysis)*
+
 ### 1.1 VPC IPv4 Address Plan
 - **Primary VPC (Tokyo `ap-northeast-1`)**: CIDR Block `10.100.0.0/16`
 - **Availability Zones**: Multi-AZ deployment across `ap-northeast-1a`, `ap-northeast-1c`, `ap-northeast-1d`
@@ -41,7 +43,7 @@
 - **Listeners**:
   - Port 80 (HTTP): Redirects `HTTP 301` to Port 443 (HTTPS).
   - Port 443 (HTTPS): Uses SSL Policy `ELBSecurityPolicy-TLS13-1-2-2021-06` with ACM Certificate `arn:aws:acm:ap-northeast-1:123456789012:certificate/xxxx`.
-  - Idle Timeout: `300 seconds` (to support long-lived SSE connections).
+  - Idle Timeout: `300 seconds` (to support long-lived SSE connections). *(See [ADR-0011](file:///home/joe/src/bank-ai-chat/docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md), [ADR-0013](file:///home/joe/src/bank-ai-chat/docs/adr/0013-sse-streaming-and-guardrail-buffer-architecture.md))*
 - **Health Check Configuration**:
   - Path: `/health`
   - Interval: `15 seconds`
@@ -66,6 +68,8 @@
 ---
 
 ## 2. ECS Fargate Compute & Task Specifications
+
+*(See [ADR-0011](file:///home/joe/src/bank-ai-chat/docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) for rationale on selecting ECS Fargate over AWS Lambda for synchronous chat)*
 
 ### 2.1 Task Definition JSON Schema
 
@@ -136,6 +140,8 @@
 
 ## 3. Storage, Database & OpenSearch Serverless Policies
 
+*(See [ADR-0003](file:///home/joe/src/bank-ai-chat/docs/adr/0003-rakuten-bank-faq-rag-pipeline.md), [ADR-0009](file:///home/joe/src/bank-ai-chat/docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md), and [ADR-0015](file:///home/joe/src/bank-ai-chat/docs/adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md))*
+
 ### 3.1 Amazon OpenSearch Serverless (AOSS) Policies
 
 #### Encryption Policy (`aoss-security-policy-encryption`)
@@ -152,7 +158,7 @@
 }
 ```
 
-#### Network Policy (`aoss-security-policy-network`)
+#### Network Policy (`aoss-security-policy-network`) *(See [ADR-0015](file:///home/joe/src/bank-ai-chat/docs/adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md))*
 ```json
 [
   {
@@ -235,6 +241,8 @@
 ---
 
 ## 4. Complete IAM Roles & KMS Policies
+
+*(See [ADR-0017](file:///home/joe/src/bank-ai-chat/docs/adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md) for IAM topology)*
 
 ### 4.1 ECS Task Runtime Role (`BankAiEcsTaskRole`) Policy
 ```json
@@ -329,10 +337,24 @@
 
 ## 5. Observability & Alarm Targets
 
-| Alarm Name | Metric Name | Namespace | Statistic | Threshold | Evaluation | Priority | Notification |
-|---|---|---|---|---|---|---|---|
-| `BankAi-P95LatencyHigh` | `TargetResponseTime` | `AWS/ApplicationELB` | P95 | `> 0.800 s` | 2 periods (5 mins) | P2 High | SNS -> DevOps Pager |
-| `BankAi-5xxErrorSpike` | `HTTPCode_Target_5XX_Count` | `AWS/ApplicationELB` | Sum | `> 5 reqs` | 1 period (1 min) | P1 Critical | SNS -> SRE Page |
-| `BankAi-GuardrailBlockSurge` | `GuardrailBlockCount` | `BankAi/ControlPlane` | Sum | `> 10 blocks` | 1 period (5 mins) | P2 Security | SNS -> SOC Alert |
-| `BankAi-GroundingViolation` | `GroundingViolationCount` | `BankAi/ControlPlane` | Sum | `> 5 count` | 1 period (5 mins) | P2 High | SNS -> Model Governance |
-| `BankAi-AuditS3WriteError` | `S3AuditWriteError` | `BankAi/Audit` | Sum | `> 0 errors` | 1 period (1 min) | P0 Blocker | SNS -> Immediate Page |
+*(See [ADR-0018](file:///home/joe/src/bank-ai-chat/docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) for telemetry details)*
+
+| Alarm Name | Metric Name | Namespace | Statistic | Threshold | Evaluation | Priority | Notification | Governing ADR |
+|---|---|---|---|---|---|---|---|---|
+| `BankAi-P95LatencyHigh` | `TargetResponseTime` | `AWS/ApplicationELB` | P95 | `> 0.800 s` | 2 periods (5 mins) | P2 High | SNS -> DevOps Pager | [ADR-0011](file:///home/joe/src/bank-ai-chat/docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md), [ADR-0018](file:///home/joe/src/bank-ai-chat/docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) |
+| `BankAi-5xxErrorSpike` | `HTTPCode_Target_5XX_Count` | `AWS/ApplicationELB` | Sum | `> 5 reqs` | 1 period (1 min) | P1 Critical | SNS -> SRE Page | [ADR-0018](file:///home/joe/src/bank-ai-chat/docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) |
+| `BankAi-GuardrailBlockSurge` | `GuardrailBlockCount` | `BankAi/ControlPlane` | Sum | `> 10 blocks` | 1 period (5 mins) | P2 Security | SNS -> SOC Alert | [ADR-0009](file:///home/joe/src/bank-ai-chat/docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0018](file:///home/joe/src/bank-ai-chat/docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) |
+| `BankAi-GroundingViolation` | `GroundingViolationCount` | `BankAi/ControlPlane` | Sum | `> 5 count` | 1 period (5 mins) | P2 High | SNS -> Model Governance | [ADR-0009](file:///home/joe/src/bank-ai-chat/docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0018](file:///home/joe/src/bank-ai-chat/docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) |
+| `BankAi-AuditS3WriteError` | `S3AuditWriteError` | `BankAi/Audit` | Sum | `> 0 errors` | 1 period (1 min) | P0 Blocker | SNS -> Immediate Page | [ADR-0009](file:///home/joe/src/bank-ai-chat/docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0018](file:///home/joe/src/bank-ai-chat/docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) |
+
+---
+
+## 6. Terraform IaC Remote State & Lock Specification
+
+*(See [ADR-0016](file:///home/joe/src/bank-ai-chat/docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md) for deterministic IaC architecture)*
+
+To enforce 100% codified deployment with zero manual console intervention:
+- **Remote State Bucket**: `japan-bank-ai-tfstate-ap-northeast-1` with S3 Versioning enabled and AES-256 KMS encryption (`alias/bank-ai-cmk`).
+- **State Locking Table**: Amazon DynamoDB table `japan-bank-ai-tfstate-lock` with Primary Key `LockID` (String).
+- **Environment Isolation**: Separate state key paths (`env:/prod/terraform.tfstate`, `env:/dev/terraform.tfstate`).
+
