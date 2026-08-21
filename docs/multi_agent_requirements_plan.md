@@ -63,6 +63,23 @@ graph TD
     D6 --> W15 & W16 & W17 & W18
 ```
 
+### 1.3 Baseline Ingestion Strategy: Synthesizing & Modularizing Existing Docs
+
+The repository already contains rich, highly detailed architectural and security specifications. The multi-agent process does **NOT** invent requirements from scratch; rather, it performs a **lossless modularization, refinement, and expansion** of the existing baseline documents:
+
+| Existing Baseline Document | Size / Scope | Primary Ingestion Target in Requirements Suite |
+|---|---|---|
+| [`docs/requirements_definition.md`](requirements_definition.md) | 35.8 KB / 14 Sections | Modularized across `01`, `02`, `03`, `04`, `05`, `07`, `14`, `15`, `16` |
+| [`docs/security_dlp_guardrails_requirements.md`](security_dlp_guardrails_requirements.md) | 26.6 KB / DLP & Compliance | Decomposed into `08` (APPI), `09` (FSA/FIEA), `10` (FISC), `11` (DLP/Injection) |
+| [`docs/aws_architecture.md`](aws_architecture.md) | 26.6 KB / 3-Tier VPC & Services | Feeds into `07` (Non-Functional) and `17` (Infra & IaC) |
+| [`docs/aws_detailed_design_specification.md`](aws_detailed_design_specification.md) | 15.6 KB / Network & Endpoints | Feeds into `17` (AWS 3-Tier Infra & IaC Requirements) |
+| [`docs/aws_architecture_governance_and_expert_review.md`](aws_architecture_governance_and_expert_review.md) | 29.8 KB / Well-Architected & FinOps | Feeds into `01` (Business ROI), `07` (Reliability), `18` (Governance) |
+| [`docs/aws_cloud_architect_masterclass.md`](aws_cloud_architect_masterclass.md) | 23.1 KB / Streaming & Latency | Feeds into `06` (UI/UX SSE Streaming) and `07` (P95 Performance) |
+| [`docs/cicd_pipeline.md`](cicd_pipeline.md) | 11.3 KB / GitHub Actions & Gates | Feeds into `17` (CI/CD Quality Gates & Release Management) |
+| [`docs/cost_estimation.md`](cost_estimation.md) | 5.0 KB / Financial Model | Feeds into `01` (Business Value & Financial Model) |
+| [`docs/local_llm_development.md`](local_llm_development.md) | 2.9 KB / Offline Fallback Engine | Feeds into `16` (Offline & Degraded Fallback Operations) |
+| [`docs/adr/0001` ~ `0019`](adr/) | 19 Decision Records | Direct governing policy and decision rationale for each respective document |
+
 ---
 
 ## 2. Requirements Definition Document Suite (18 Documents)
@@ -186,25 +203,25 @@ Every requirements document is structured with a unified header:
 
 ---
 
-## 6. Traceability Matrix to Existing ADRs & Codebase
+## 6. Traceability Matrix to Existing ADRs, Base Documents & Codebase
 
-| Requirements Document | Governing ADRs | Implementation Modules |
-|---|---|---|
-| `01_business_requirements.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0005](adr/0005-hybrid-cloud-and-aws-poc-architecture.md) | `src/backend/app.py` |
-| `02_business_process_and_use_cases.md` | [ADR-0004](adr/0004-synthetic-japanese-account-schema.md), [ADR-0010](adr/0010-personalized-account-tier-reasoning.md) | `src/backend/core_banking_client.py`, `data/` |
-| `03_ai_and_rag_functional.md` | [ADR-0002](adr/0002-aws-bedrock-nova-lite-model-selection.md), [ADR-0003](adr/0003-rakuten-bank-faq-rag-pipeline.md), [ADR-0015](adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md) | `src/rag/`, `src/llm/bedrock_client.py` |
-| `04_core_banking_integration.md` | [ADR-0004](adr/0004-synthetic-japanese-account-schema.md), [ADR-0008](adr/0008-decoupled-core-banking-database-and-api.md) | `src/backend/core_banking_client.py` |
-| `05_auth_and_session.md` | [ADR-0014](adr/0014-zero-trust-step-up-authentication-boundary.md) | `src/backend/auth.py`, `src/control_plane/step_up.py` |
-| `06_frontend_and_uiux.md` | [ADR-0013](adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) | `src/frontend/` |
-| `07_non_functional_requirements.md` | [ADR-0007](adr/0007-production-aws-detailed-design-specification.md), [ADR-0011](adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) | `Dockerfile`, ECS task definitions |
-| `08_appi_pii_dlp_requirements.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0012](adr/0012-in-vpc-salted-tokenization-vault.md) | `src/control_plane/input_guardrail.py`, `token_vault.py` |
-| `09_fsa_and_legal_compliance.md` | [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0010](adr/0010-personalized-account-tier-reasoning.md) | `src/control_plane/output_guardrail.py` |
-| `10_fisc_security_standards.md` | [ADR-0005](adr/0005-hybrid-cloud-and-aws-poc-architecture.md), [ADR-0017](adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md) | KMS policies, IAM roles |
-| `11_prompt_injection_defense.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md) | `src/control_plane/input_guardrail.py` |
-| `12_prompt_and_banking_persona.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0002](adr/0002-aws-bedrock-nova-lite-model-selection.md) | `src/llm/bedrock_client.py` |
-| `13_grounding_and_evaluation.md` | [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md) | `src/control_plane/output_guardrail.py`, `tests/` |
-| `14_data_models_and_schemas.md` | [ADR-0004](adr/0004-synthetic-japanese-account-schema.md) | `src/backend/schemas.py`, `data/synthetic_accounts.json` |
-| `15_api_specifications.md` | [ADR-0008](adr/0008-decoupled-core-banking-database-and-api.md), [ADR-0013](adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) | `src/backend/app.py` |
-| `16_fallback_and_circuit_breaker.md` | [ADR-0008](adr/0008-decoupled-core-banking-database-and-api.md), [ADR-0019](adr/0019-local-llm-provider-and-fallback-architecture.md) | `src/backend/core_banking_client.py`, `src/llm/` |
-| `17_infrastructure_iac_requirements.md` | [ADR-0007](adr/0007-production-aws-detailed-design-specification.md), [ADR-0016](adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md) | Terraform configs |
-| `18_audit_logging_and_monitoring.md` | [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0018](adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) | `src/control_plane/audit_logger.py` |
+| Requirements Document | Governing ADRs | Baseline Source Documents (Existing Docs) | Implementation Modules |
+|---|---|---|---|
+| `01_business_requirements.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0005](adr/0005-hybrid-cloud-and-aws-poc-architecture.md) | `requirements_definition.md` (Sec 1), `cost_estimation.md` | `src/backend/app.py` |
+| `02_business_process_and_use_cases.md` | [ADR-0004](adr/0004-synthetic-japanese-account-schema.md), [ADR-0010](adr/0010-personalized-account-tier-reasoning.md) | `requirements_definition.md` (Sec 1, 3, 10), `data/synthetic_accounts.json` | `src/backend/core_banking_client.py`, `data/` |
+| `03_ai_and_rag_functional.md` | [ADR-0002](adr/0002-aws-bedrock-nova-lite-model-selection.md), [ADR-0003](adr/0003-rakuten-bank-faq-rag-pipeline.md), [ADR-0015](adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md) | `requirements_definition.md` (Sec 4, 7), `aws_architecture.md` | `src/rag/`, `src/llm/bedrock_client.py` |
+| `04_core_banking_integration.md` | [ADR-0004](adr/0004-synthetic-japanese-account-schema.md), [ADR-0008](adr/0008-decoupled-core-banking-database-and-api.md) | `requirements_definition.md` (Sec 6), `data/synthetic_accounts.json` | `src/backend/core_banking_client.py` |
+| `05_auth_and_session.md` | [ADR-0014](adr/0014-zero-trust-step-up-authentication-boundary.md) | `requirements_definition.md` (Sec 10), `security_dlp_guardrails_requirements.md` | `src/backend/auth.py`, `src/control_plane/step_up.py` |
+| `06_frontend_and_uiux.md` | [ADR-0013](adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) | `requirements_definition.md` (Sec 4), `aws_cloud_architect_masterclass.md` | `src/frontend/` |
+| `07_non_functional_requirements.md` | [ADR-0007](adr/0007-production-aws-detailed-design-specification.md), [ADR-0011](adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) | `requirements_definition.md` (Sec 8), `aws_architecture_governance_and_expert_review.md` | `Dockerfile`, ECS task definitions |
+| `08_appi_pii_dlp_requirements.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0012](adr/0012-in-vpc-salted-tokenization-vault.md) | `requirements_definition.md` (Sec 2.1, 4), `security_dlp_guardrails_requirements.md` (Sec 1, 2) | `src/control_plane/input_guardrail.py`, `token_vault.py` |
+| `09_fsa_and_legal_compliance.md` | [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0010](adr/0010-personalized-account-tier-reasoning.md) | `requirements_definition.md` (Sec 2.2, 4), `security_dlp_guardrails_requirements.md` (Sec 3) | `src/control_plane/output_guardrail.py` |
+| `10_fisc_security_standards.md` | [ADR-0005](adr/0005-hybrid-cloud-and-aws-poc-architecture.md), [ADR-0017](adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md) | `requirements_definition.md` (Sec 2.3, 12), `security_dlp_guardrails_requirements.md` (Sec 4) | KMS policies, IAM roles |
+| `11_prompt_injection_defense.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md) | `requirements_definition.md` (Sec 4), `security_dlp_guardrails_requirements.md` (Sec 5) | `src/control_plane/input_guardrail.py` |
+| `12_prompt_and_banking_persona.md` | [ADR-0001](adr/0001-japanese-banking-compliance-and-control-planes.md), [ADR-0002](adr/0002-aws-bedrock-nova-lite-model-selection.md) | `requirements_definition.md` (Sec 1, 4), `src/llm/bedrock_client.py` | `src/llm/bedrock_client.py` |
+| `13_grounding_and_evaluation.md` | [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md) | `requirements_definition.md` (Sec 4), `security_dlp_guardrails_requirements.md` (Sec 3.3) | `src/control_plane/output_guardrail.py`, `tests/` |
+| `14_data_models_and_schemas.md` | [ADR-0004](adr/0004-synthetic-japanese-account-schema.md) | `requirements_definition.md` (Sec 3), `data/synthetic_accounts.json` | `src/backend/schemas.py`, `data/synthetic_accounts.json` |
+| `15_api_specifications.md` | [ADR-0008](adr/0008-decoupled-core-banking-database-and-api.md), [ADR-0013](adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) | `requirements_definition.md` (Sec 6), `aws_architecture.md` | `src/backend/app.py` |
+| `16_fallback_and_circuit_breaker.md` | [ADR-0008](adr/0008-decoupled-core-banking-database-and-api.md), [ADR-0019](adr/0019-local-llm-provider-and-fallback-architecture.md) | `requirements_definition.md` (Sec 6, 11), `local_llm_development.md` | `src/backend/core_banking_client.py`, `src/llm/` |
+| `17_infrastructure_iac_requirements.md` | [ADR-0007](adr/0007-production-aws-detailed-design-specification.md), [ADR-0016](adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md) | `aws_architecture.md`, `aws_detailed_design_specification.md`, `cicd_pipeline.md` | Terraform configs |
+| `18_audit_logging_and_monitoring.md` | [ADR-0009](adr/0009-dlp-security-guardrails-and-compliance-framework.md), [ADR-0018](adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) | `requirements_definition.md` (Sec 9), `security_dlp_guardrails_requirements.md` (Sec 6) | `src/control_plane/audit_logger.py` |
