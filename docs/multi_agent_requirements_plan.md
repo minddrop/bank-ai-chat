@@ -80,6 +80,20 @@ The repository already contains rich, highly detailed architectural and security
 | [`docs/local_llm_development.md`](local_llm_development.md) | 2.9 KB / Offline Fallback Engine | Feeds into `16` (Offline & Degraded Fallback Operations) |
 | [`docs/adr/0001` ~ `0019`](adr/) | 19 Decision Records | Direct governing policy and decision rationale for each respective document |
 
+### 1.4 Codebase Implementation Ingestion & As-Built Binding Strategy
+
+The multi-agent process directly inspects and binds the **existing production source code, synthetic data, tests, and scripts** to ensure 100% agreement between specification and code:
+
+| Existing Codebase Component | Implementation Files | Ingested Code Artifacts & Binding Target |
+|---|---|---|
+| **Control Plane (In-VPC DLP)** | `src/control_plane/input_guardrail.py`<br/>`src/control_plane/output_guardrail.py`<br/>`src/control_plane/audit_logger.py` | Regex patterns (`\d{7}`, Katakana names), PII tokenization dictionary, Grounding Score threshold (`0.85`), SHA-256 HMAC tamper-evident log structures -> Binds to **`08`, `09`, `11`, `18`** |
+| **Core Banking System** | `src/core_banking/database.py`<br/>`src/core_banking/service.py`<br/>`src/core_banking/client.py` | SQLite schema (`customers`, `accounts`, `transactions`), Happy Program VIP loyalty rules, balance inquiry logic -> Binds to **`04`, `14`** |
+| **RAG & Knowledge Base** | `src/rag/vector_store.py`<br/>`data/rakuten_faq.json`<br/>`scripts/crawl_full_rakuten_faq.py` | FAQ document schema (`category`, `question`, `answer`), TF-IDF/Vector similarity search, 1024-dim Titan embeddings -> Binds to **`03`, `13`** |
+| **LLM Inference & Persona** | `src/llm/bedrock_nova.py`<br/>`src/llm/local_llm.py` | Amazon Bedrock Nova Lite invocation, Japanese Keigo system prompts, SSE chunk buffer, local offline fallback -> Binds to **`03`, `12`, `16`** |
+| **Backend API Gateway** | `src/backend/app.py`<br/>`src/backend/server.py` | FastAPI REST routes (`/api/chat/stream`, `/api/customers`, `/api/step-up-auth`), CORS, error handlers, step-up MFA -> Binds to **`05`, `15`, `16`** |
+| **Frontend Banking Portal** | `src/frontend/app.js`<br/>`src/frontend/index.html`<br/>`src/frontend/styles.css` | Customer persona switcher, SSE event stream listener, control plane telemetry dashboard, disclaimer rendering -> Binds to **`06`** |
+| **Automated Test Vectors** | `tests/test_guardrails.py`<br/>`tests/test_core_banking.py`<br/>`tests/test_account_data.py`<br/>`tests/test_rag.py`<br/>`tests/test_local_llm.py` | Deterministic test vectors, PII attack vectors, injection payloads, grounding assertion test cases -> Binds to **Acceptance Criteria of `01` ~ `18`** |
+
 ---
 
 ## 2. Requirements Definition Document Suite (18 Documents)
