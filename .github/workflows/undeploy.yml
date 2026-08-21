@@ -1,0 +1,45 @@
+name: Teardown & Ephemeral Cleanup Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destruction:
+        description: 'Type "DESTROY" to confirm resource teardown'
+        required: true
+        default: 'CANCEL'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  teardown-resources:
+    name: Teardown AWS Compute, Storage & Registry
+    if: ${{ github.event.inputs.confirm_destruction == 'DESTROY' }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Configure AWS Credentials (OIDC IAM Role)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '665192915466' }}:role/GitHubActionsDeployRole
+        role-session-name: GitHubActionsBankAiTeardown
+        aws-region: ap-northeast-1
+
+    - name: Delete App Runner Service
+      run: |
+        SERVICE_ARN=$(aws apprunner list-services --region ap-northeast-1 --query "ServiceSummaryList[?ServiceName=='bank-ai-chat-service'].ServiceArn" --output text)
+        if [ -n "$SERVICE_ARN" ] && [ "$SERVICE_ARN" != "None" ]; then
+          echo "Deleting App Runner service: $SERVICE_ARN"
+          aws apprunner delete-service --service-arn $SERVICE_ARN --region ap-northeast-1
+        else
+          echo "No active App Runner service found."
+        fi
+
+    - name: Delete ECR Repository & Images
+      run: |
+        aws ecr delete-repository --repository-name bank-ai-chat-app --force --region ap-northeast-1 || true
+
+    - name: Delete Build Artifacts S3 Bucket
+      run: |
+        aws s3 rb s3://bank-ai-build-artifacts-${{ secrets.AWS_ACCOUNT_ID || '665192915466' }} --force --region ap-northeast-1 || true

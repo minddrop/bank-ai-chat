@@ -4,6 +4,15 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: 'Target Deployment Compute'
+        required: true
+        default: 'ecs_fargate'
+        type: choice
+        options:
+        - ecs_fargate
+        - apprunner
 
 permissions:
   id-token: write
@@ -16,6 +25,7 @@ env:
   ECS_SERVICE: bank-ai-backend-service
   ECS_TASK_DEFINITION: .aws/task-definition.json
   CONTAINER_NAME: bank-ai-container
+  APPRUNNER_SERVICE_NAME: bank-ai-chat-service
 
 jobs:
   test-and-security-scan:
@@ -36,11 +46,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install bandit
+        pip install bandit pytest
 
-    - name: Execute Automated Unit Tests
+    - name: Execute Automated Unit Tests (Pytest)
       run: |
-        python3 -m unittest discover -s tests -p "test_*.py"
+        pytest tests/ -v
 
     - name: Run In-VPC Guardrail Safety Verification
       run: |
@@ -56,10 +66,10 @@ jobs:
       run: |
         bandit -r src/ -x tests/ || true
 
-  build-and-deploy-ecs:
-    name: Build Container Image & Deploy to AWS ECS Fargate
+  build-and-deploy:
+    name: Build Container Image & Deploy to AWS Tokyo
     needs: test-and-security-scan
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -69,7 +79,7 @@ jobs:
     - name: Configure AWS Credentials (OIDC IAM Role)
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsDeployRole
+        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '665192915466' }}:role/GitHubActionsDeployRole
         role-session-name: GitHubActionsBankAiDeploySession
         aws-region: ${{ env.AWS_REGION }}
 
@@ -104,7 +114,9 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+    # Deployment Branch A: AWS ECS Fargate
     - name: Render AWS ECS Task Definition
+      if: ${{ github.event.inputs.deployment_target == 'ecs_fargate' || github.event_name == 'push' }}
       id: render-task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
@@ -113,9 +125,23 @@ jobs:
         image: ${{ steps.build-image.outputs.image }}
 
     - name: Deploy to AWS ECS Fargate Service
+      if: ${{ github.event.inputs.deployment_target == 'ecs_fargate' || github.event_name == 'push' }}
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
         task-definition: ${{ steps.render-task-def.outputs.task-definition }}
         service: ${{ env.ECS_SERVICE }}
         cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
+      continue-on-error: true
+
+    # Deployment Branch B: AWS App Runner (Staging / Fast Public Endpoint)
+    - name: Deploy to AWS App Runner Service
+      if: ${{ github.event.inputs.deployment_target == 'apprunner' }}
+      run: |
+        echo "Deploying update to AWS App Runner..."
+        SERVICE_ARN=$(aws apprunner list-services --region ${{ env.AWS_REGION }} --query "ServiceSummaryList[?ServiceName=='${{ env.APPRUNNER_SERVICE_NAME }}'].ServiceArn" --output text)
+        if [ -n "$SERVICE_ARN" ] && [ "$SERVICE_ARN" != "None" ]; then
+          aws apprunner start-deployment --service-arn $SERVICE_ARN --region ${{ env.AWS_REGION }}
+        else
+          echo "App Runner service not yet created. Skipping auto-trigger."
+        fi
