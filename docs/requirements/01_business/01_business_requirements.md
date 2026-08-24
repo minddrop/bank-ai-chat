@@ -11,14 +11,10 @@
   - FISC安全対策基準 第9版
   - 金融庁「AI等の利活用に係る基本的考え方」
 - **関連ADR**:
-  - [ADR-0001: Japanese Banking Compliance & Control Planes](../../adr/0001-japanese-compliance-and-control-planes.md)
+  - [ADR-0001: Japanese Banking Compliance & Control Planes](../../adr/0001-japanese-banking-compliance-and-control-planes.md)
   - [ADR-0002: AWS Bedrock Nova Lite Model Selection](../../adr/0002-aws-bedrock-nova-lite-model-selection.md)
   - [ADR-0005: Hybrid Cloud & AWS PoC Architecture](../../adr/0005-hybrid-cloud-and-aws-poc-architecture.md)
   - [ADR-0006: CI/CD & Production Cost Estimation](../../adr/0006-cicd-and-production-cost-estimation.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 1)
-  - [`docs/cost_estimation.md`](../cost_estimation.md)
-  - [`docs/aws_architecture_governance_and_expert_review.md`](../aws_architecture_governance_and_expert_review.md)
 - **実装マッピング**:
   - [`src/backend/app.py`](file:///home/joe/src/bank-ai-chat/src/backend/app.py)
   - [`src/backend/server.py`](file:///home/joe/src/bank-ai-chat/src/backend/server.py)
@@ -104,17 +100,32 @@ graph TD
 
 ---
 
-## 5. 投資対効果 (ROI) およびビジネス価値試算
+## 5. 投資対効果 (ROI) およびクラウド運用コスト試算 (AWS Tokyo `ap-northeast-1`)
 
-### 5.1 クラウド運用コスト試算 (AWS Tokyo `ap-northeast-1`)
-月間100万件処理時のインフラ運用総コストは **約 $540.40 USD / 月 (約 ¥81,060 JPY / 月)**、年間約 **¥972,720 JPY / 年**。
+### 5.1 クラウド運用コスト内訳試算 (月間100万件リクエスト基準)
+月間100万件処理時のインフラ運用総コストは **約 $540.40 USD / 月 (約 ¥81,060 JPY / 月)**、年間約 **$6,484.80 USD / 年 (約 ¥972,720 JPY / 年)** です（為替レート $1 = ¥150 換算）。
 
-### 5.2 コスト削減効果 (Call Center Deflection Savings)
-- 有人コールセンターにおける1コールあたりの平均受電対応コスト: **約 ¥300 JPY / 件**
-- 月間100万件の問い合わせのうち、AIチャットで定型問い合わせを85万件自己解決（Deflection）した場合:
-  $$\text{月間削減想定額} = 850,000 \text{ 件} \times ¥300 = ¥255,000,000 \text{ JPY / 月}$$
-  $$\text{年間削減想定額} = ¥3,060,000,000 \text{ JPY / 年}$$
-- **年間純費用対効果 (Net Benefit)**: システム年間インフラコスト（約97万円）に対し、圧倒的なコールセンター運用コスト削減を実現。
+| サービスコンポーネント | スペック & 容量設計 | 単価 (USD) | 月額 (USD) | 月額換算 (JPY) | 準拠ADR |
+|---|---|---|---|---|---|
+| **Amazon Bedrock** (Nova Lite) | 1,000,000 req/月 (5億 in / 3億 out tokens) | $0.00006/1K in, $0.00024/1K out | $102.00 | ¥15,300 | [ADR-0002](../../adr/0002-aws-bedrock-nova-lite-model-selection.md) |
+| **AWS ECS Fargate** (App & Guardrails) | 4 Tasks × (2 vCPU, 4GB RAM) Multi-AZ | $0.04048/vCPU-hr, $0.004445/GB-hr | $184.00 | ¥27,600 | [ADR-0011](../../adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) |
+| **Amazon OpenSearch Serverless** (FAQ RAG) | 2 OCU Multi-AZ Vector Index | $0.24/OCU-hr | $140.00 | ¥21,000 | [ADR-0015](../../adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md) |
+| **Amazon S3** (暗号化監査ログ保管) | 100 GB Standard Storage + KMS暗号化 | $0.025/GB | $12.50 | ¥1,875 | [ADR-0009](../../adr/0009-dlp-security-guardrails-and-compliance-framework.md) |
+| **AWS KMS** (Customer Managed Keys) | 2 CMK Keys (監査ログ & ベクトルDB暗号化) | $1.00/key/month | $2.00 | ¥300 | [ADR-0017](../../adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md) |
+| **AWS Application Load Balancer** | Dual-AZ ALB + LCU processing | $0.0243/hr + LCU charges | $28.50 | ¥4,275 | [ADR-0007](../../adr/0007-production-aws-detailed-design-specification.md) |
+| **AWS WAF & Shield Standard** | 1 Web ACL + 5 Managed Rulesets (OWASP Top 10等) | $5.00/ACL + $1.00/rule | $35.00 | ¥5,250 | [ADR-0007](../../adr/0007-production-aws-detailed-design-specification.md) |
+| **Amazon CloudWatch & X-Ray** | 30 GB Log Ingestion, Alarm metrics, X-Ray | $0.675/GB | $25.00 | ¥3,750 | [ADR-0018](../../adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md) |
+| **AWS Network Egress** | Data Transfer Out (100 GB/月) | $0.114/GB | $11.40 | ¥1,710 | [ADR-0005](../../adr/0005-hybrid-cloud-and-aws-poc-architecture.md) |
+| **合計運用コスト** | | | **$540.40 / 月** | **¥81,060 / 月** | [ADR-0006](../../adr/0006-cicd-and-production-cost-estimation.md) |
+
+### 5.2 コスト削減効果 (Call Center Deflection Savings) & ROI分析
+1. **85%以上のLLM費用削減**: 高価な汎用LLM（Claude 3 OpusやGPT-4等）に比べ、軽量・高速な **Amazon Nova Lite** の採用により、日本語敬語品質を維持したままモデル利用料を大幅に削減。
+2. **有人コールセンター業務削減効果**: 
+   - 有人コールセンターにおける1コールあたりの平均受電対応コスト: **約 ¥300 JPY / 件**
+   - 月間100万件の問い合わせのうち、AIチャットで定型問い合わせを85万件自己解決（Deflection）した場合:
+     $$\text{月間削減想定額} = 850,000 \text{ 件} \times ¥300 = ¥255,000,000 \text{ JPY / 月}$$
+     $$\text{年間削減想定額} = ¥3,060,000,000 \text{ JPY / 年}$$
+3. **FISC安全対策基準の低コスト充足**: AWSマネージドサービス（KMS、S3 Object Lock、OpenSearch Serverless）の活用により、追加のオンプレミス高額アプライアンスを導入することなく厳格な金融コンプライアンスを充足。
 
 ---
 

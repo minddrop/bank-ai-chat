@@ -12,7 +12,6 @@
   - [ADR-0004: Synthetic Japanese Account Schema](../../adr/0004-synthetic-japanese-account-schema.md)
   - [ADR-0010: Personalized Account Tier Reasoning](../../adr/0010-personalized-account-tier-reasoning.md)
   - [ADR-0014: Zero Trust Step-Up Authentication Boundary](../../adr/0014-zero-trust-step-up-authentication-boundary.md)
-- **ベースライン文書**: [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 1, 3, 10)
 - **実装マッピング**:
   - [`src/core_banking/service.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/service.py)
   - [`src/backend/app.py`](file:///home/joe/src/bank-ai-chat/src/backend/app.py)
@@ -121,10 +120,13 @@ sequenceDiagram
 - **発火条件**:
   - 顧客が「オペレータに代わって」「窓口の人と話したい」と要求。
   - AIの回答信頼度（Grounding Score）が基準値（0.85）を下回った場合。
-- **処理フロー**:
+- **処理フロー（営業時間内: 平日9:00〜17:00）**:
   1. AIが「承知いたしました。担当オペレータにお繋ぎいたします。」と応答。
   2. サニタイズ済みのセッションID、対話履歴サマリをCRM連携キューへプッシュ。
   3. フロントエンドに有人チャット接続ウィジェットまたはコンタクトセンター電話番号（0120-XXX-XXX）を表示。
+- **夜間・休日・営業時間外フォールバックフロー（24/7 Out-of-Hours Fallback）**:
+  1. コールセンター営業時間外の場合、AIが「あいにく現在はオペレータ受付時間外（平日9:00〜17:00）となっております。」と通知。
+  2. 「翌営業日コールバック予約フォーム」または「セキュアWeb問い合わせフォーム（24時間受付）」へのリンクを提示し、顧客の問い合わせ内容を事前下書き保存。
 
 ---
 
