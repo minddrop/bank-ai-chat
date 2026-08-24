@@ -10,7 +10,6 @@
 - **関連ADR**:
   - [ADR-0004: Synthetic Japanese Account Schema](../../adr/0004-synthetic-japanese-account-schema.md)
   - [ADR-0008: Decoupled Core Banking Database & API](../../adr/0008-decoupled-core-banking-database-and-api.md)
-- **ベースライン文書**: [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 6)
 - **実装マッピング**:
   - [`src/core_banking/service.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/service.py)
   - [`src/core_banking/client.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/client.py)

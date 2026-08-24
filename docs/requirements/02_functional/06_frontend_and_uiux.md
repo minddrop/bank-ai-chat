@@ -10,9 +10,6 @@
   - 日本銀行協会「インターネットバンキング画面のアクセシビリティおよびセキュリティ表示ガイドライン」
 - **関連ADR**:
   - [ADR-0013: SSE Streaming & Guardrail Buffer Architecture](../../adr/0013-sse-streaming-and-guardrail-buffer-architecture.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 4)
-  - [`docs/aws_cloud_architect_masterclass.md`](../aws_cloud_architect_masterclass.md)
 - **実装マッピング**:
   - [`src/frontend/index.html`](file:///home/joe/src/bank-ai-chat/src/frontend/index.html)
   - [`src/frontend/styles.css`](file:///home/joe/src/bank-ai-chat/src/frontend/styles.css)
@@ -55,12 +52,17 @@ graph TD
 
 ## 3. Server-Sent Events (SSE) ストリーミング仕様
 
-### 3.1 SSEイベントプロトコル
+### 3.1 SSEプロトコル選定理由（vs WebSocket）
+- **単方向ストリーミングの簡潔性**: AI対話生成は「要求（Request）1回に対して逐次生成トークンが単方向に流れる」モデルであり、双方向ステートフルなWebSocketに比べHTTP/1.1・HTTP/2標準のSSEが最も軽量かつ堅牢。
+- **AWS ALB・WAF親和性**: Application Load Balancer（ALB）やAWS WAFの標準HTTPパイプラインで透過的にプロキシ可能であり、プロトコル変換オーバーヘッドやステート維持メモリを最小化。
+- **自動再接続 & バッファリング制御**: ブラウザ標準の再接続機構および `X-Accel-Buffering: no` によるナノ秒単位のフラッシュ描画を実現。
+
+### 3.2 SSEイベントプロトコル
 - **エンドポイント**: `POST /api/chat/stream`
 - **Content-Type**: `text/event-stream; charset=utf-8`
 - **キャッシュ制御**: `Cache-Control: no-cache`, `X-Accel-Buffering: no`
 
-### 3.2 イベントペイロード構造
+### 3.3 イベントペイロード構造
 ```text
 data: {"type": "guardrail_status", "input_guardrail": {"allowed": true, "pii_scrubbed": ["[口座番号保護: XXXXXXX]"]}}
 

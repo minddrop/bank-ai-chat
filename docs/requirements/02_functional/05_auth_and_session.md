@@ -10,9 +10,6 @@
   - NIST SP 800-63B (Digital Identity Guidelines: Authentication and Lifecycle Management)
 - **関連ADR**:
   - [ADR-0014: Zero Trust Step-Up Authentication Boundary](../../adr/0014-zero-trust-step-up-authentication-boundary.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 10)
-  - [`docs/security_dlp_guardrails_requirements.md`](../security_dlp_guardrails_requirements.md)
 - **実装マッピング**:
   - [`src/backend/app.py`](file:///home/joe/src/bank-ai-chat/src/backend/app.py)
   - [`src/backend/server.py`](file:///home/joe/src/bank-ai-chat/src/backend/server.py)

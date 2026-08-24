@@ -11,9 +11,6 @@
   - [ADR-0002: AWS Bedrock Nova Lite Model Selection](../../adr/0002-aws-bedrock-nova-lite-model-selection.md)
   - [ADR-0003: Rakuten Bank FAQ RAG Pipeline](../../adr/0003-rakuten-bank-faq-rag-pipeline.md)
   - [ADR-0015: OpenSearch Serverless Isolation & Vector Dimension Standard](../../adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 4, 7)
-  - [`docs/aws_architecture.md`](../aws_architecture.md)
 - **実装マッピング**:
   - [`src/llm/bedrock_nova.py`](file:///home/joe/src/bank-ai-chat/src/llm/bedrock_nova.py)
   - [`src/rag/vector_store.py`](file:///home/joe/src/bank-ai-chat/src/rag/vector_store.py)
