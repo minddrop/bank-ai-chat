@@ -9,9 +9,6 @@
   - ISO/IEC 42001:2023 (Artificial Intelligence Management System)
 - **関連ADR**:
   - [ADR-0009: DLP Security Guardrails & Compliance Framework](../../adr/0009-dlp-security-guardrails-and-compliance-framework.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 4)
-  - [`docs/security_dlp_guardrails_requirements.md`](../security_dlp_guardrails_requirements.md) (Sec 3.3)
 - **実装マッピング**:
   - [`src/control_plane/output_guardrail.py`](file:///home/joe/src/bank-ai-chat/src/control_plane/output_guardrail.py)
   - [`tests/test_guardrails.py`](file:///home/joe/src/bank-ai-chat/tests/test_guardrails.py)
@@ -57,6 +54,8 @@ $$\text{Grounding Score} = \min\left(1.0, \frac{\sum_{i} \mathbb{I}(R_i \in C)}{
    - 楽天銀行FAQから抽出された正解ペア 100問（手数料、ATM、口座開設、セキュリティ）。
 2. **自動CI/CDゲート**:
    - プルリクエスト作成時に `pytest tests/` を実行し、ゴールデンデータセットに対する平均Grounding Scoreが **0.90 以上** であることをマージ条件とします。
+3. **LLM-as-a-Judge クロス検証ロードマップ**:
+   - 月次モデル監査において、上位基盤モデル（Claude 3.5 Sonnet / Amazon Nova Pro）を審査官（Judge）としたオフライン二重ブラインド評価を実施し、敬語品格度・忠実度・毒性を5段階定量レーティング。
 
 ---
 

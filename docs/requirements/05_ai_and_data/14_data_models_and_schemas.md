@@ -13,7 +13,6 @@
   - [ADR-0008: Decoupled Core Banking Database & API](../../adr/0008-decoupled-core-banking-database-and-api.md)
   - [ADR-0010: Personalized Account Tier Reasoning](../../adr/0010-personalized-account-tier-reasoning.md)
   - [ADR-0012: In-VPC Salted Tokenization Vault](../../adr/0012-in-vpc-salted-tokenization-vault.md)
-- **ベースライン文書**: [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 3)
 - **実装マッピング**: 
   - [`src/core_banking/database.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/database.py)
   - [`src/core_banking/service.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/service.py)

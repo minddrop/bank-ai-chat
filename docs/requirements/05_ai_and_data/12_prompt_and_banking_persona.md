@@ -10,7 +10,6 @@
 - **関連ADR**:
   - [ADR-0001: Japanese Banking Compliance & Control Planes](../../adr/0001-japanese-banking-compliance-and-control-planes.md)
   - [ADR-0002: AWS Bedrock Nova Lite Model Selection](../../adr/0002-aws-bedrock-nova-lite-model-selection.md)
-- **ベースライン文書**: [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 1, 4)
 - **実装マッピング**:
   - [`src/llm/bedrock_nova.py`](file:///home/joe/src/bank-ai-chat/src/llm/bedrock_nova.py)
   - [`src/llm/local_llm.py`](file:///home/joe/src/bank-ai-chat/src/llm/local_llm.py)
