@@ -23,7 +23,7 @@ The AI Assistant System must operate in production under strict regulatory const
 
 ## Decision Outcome
 
-Adopt the complete **AWS Detailed Architecture Design Specification** detailed in [AWS Detailed Architecture Design Specification](../aws_detailed_design_specification.md).
+Adopt the complete **AWS Detailed Architecture Design Specification** detailed in [Infrastructure & IaC Requirements](../requirements/07_operations_and_infra/17_infrastructure_iac_requirements.md).
 
 ### Architecture Highlights:
 - **VPC Address Space**: `10.100.0.0/16` across 3 Availability Zones (`ap-northeast-1a`, `1c`, `1d`).
