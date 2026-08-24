@@ -10,9 +10,6 @@
 - **関連ADR**:
   - [ADR-0008: Decoupled Core Banking Database & API](../../adr/0008-decoupled-core-banking-database-and-api.md)
   - [ADR-0019: Local LLM Provider & Fallback Architecture](../../adr/0019-local-llm-provider-and-fallback-architecture.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 6, 11)
-  - [`docs/local_llm_development.md`](../local_llm_development.md)
 - **実装マッピング**:
   - [`src/core_banking/client.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/client.py)
   - [`src/llm/local_llm.py`](file:///home/joe/src/bank-ai-chat/src/llm/local_llm.py)
@@ -59,6 +56,22 @@ stateDiagram-v2
 - **縮退アクション**:
   1. キーワード完全一致による簡易ローカル辞書検索へフォールバック。
   2. 未知の質問に対しては「恐れ入りますが、該当の案内が見つかりませんでした。コンタクトセンター窓口をご利用ください。」と案内。
+
+### 2.4 開発環境用ローカルLLM & オフラインフォールバック仕様 (ADR-0019準拠)
+AWS Bedrock認証情報のないローカル開発環境やオフライン隔離テスト環境において、完全な機能動作を保証するためのローカルLLMプロバイダー仕様です：
+
+- **推奨軽量モデル**:
+  - `qwen2.5:0.5b` (メモリフットプリント ~390MB、高速敬語生成、推奨デフォルト)
+  - `qwen2.5:1.5b` (メモリフットプリント ~980MB、高精度敬語生成)
+  - `gemma:2b` (メモリフットプリント ~1.4GB)
+- **環境変数設定インターフェース**:
+  ```bash
+  export LLM_PROVIDER=local
+  export LOCAL_LLM_MODEL=qwen2.5:0.5b
+  export LOCAL_LLM_URL=http://localhost:11434/v1
+  ```
+- **多段フォールバック挙動**: Ollamaサーバが停止している場合でも、`LocalLLMClient` は自動的に内部の **Local Light Development Engine (ルールベース推論)** にフォールバックし、テストスイート（`tests/test_local_llm.py`）をエラーなく実行可能。
+- **セットアップ検証ツール**: `python3 scripts/setup_local_llm.py --model qwen2.5:0.5b` による自動モデルDL・稼働検証。
 
 ---
 

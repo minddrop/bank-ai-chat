@@ -11,9 +11,6 @@
 - **関連ADR**:
   - [ADR-0008: Decoupled Core Banking Database & API](../../adr/0008-decoupled-core-banking-database-and-api.md)
   - [ADR-0013: SSE Streaming & Guardrail Buffer Architecture](../../adr/0013-sse-streaming-and-guardrail-buffer-architecture.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 6)
-  - [`docs/aws_architecture.md`](../aws_architecture.md)
 - **実装マッピング**:
   - [`src/backend/app.py`](file:///home/joe/src/bank-ai-chat/src/backend/app.py)
   - [`src/backend/server.py`](file:///home/joe/src/bank-ai-chat/src/backend/server.py)
@@ -24,14 +21,17 @@
 
 | メソッド | パス | 説明 | 認証要否 | 戻り値形式 |
 |---|---|---|---|---|
-| `POST` | `/api/chat` | AIチャット対話エンドポイント (同期JSON返却) | ◯ (JWT) | `application/json` |
-| `POST` | `/api/chat/stream` | AIチャット対話エンドポイント (リアルタイムSSE) | ◯ (JWT) | `text/event-stream` |
-| `GET` | `/api/customers` | 顧客一覧取得 (シミュレーター・テスト用) | ◯ | `application/json` |
-| `GET` | `/api/customers/{customer_id}` | 顧客プロファイル・口座残高照会 | ◯ | `application/json` |
-| `GET` | `/api/transactions` | 直近取引明細一覧取得 | ◯ | `application/json` |
-| `GET` | `/api/audit-logs` | 改ざん防止監査ログ一覧照会 | ◯ (Admin) | `application/json` |
-| `POST` | `/api/step-up-auth` | ステップアップMFA要求検証・誘導 | ◯ | `application/json` |
-| `GET` | `/api/health` | コンテナヘルスチェックエンドポイント | 不要 | `application/json` |
+| `POST` | `/api/chat` | AIチャット対話エンドポイント (統合ガードレール・同期JSON返却) | ◯ (JWT / Session) | `application/json` |
+| `POST` | `/api/chat/stream` | AIチャット対話エンドポイント (リアルタイムW3C SSEストリーミング) | ◯ (JWT / Session) | `text/event-stream` |
+| `GET` | `/api/customers` | 顧客一覧取得 (フロントエンド・デモシミュレータ用) | ◯ | `application/json` |
+| `GET` | `/api/core/customers` | 勘定系DB登録顧客一覧照会 | ◯ (Internal) | `application/json` |
+| `GET` | `/api/core/customers/{customer_id}` | 顧客詳細プロファイル・口座残高・取引履歴照会 | ◯ (JWT) | `application/json` |
+| `GET` | `/api/core/customers/{customer_id}/accounts` | 普通預金・定期預金・外貨預金 残高一覧照会 | ◯ (JWT) | `application/json` |
+| `GET` | `/api/core/customers/{customer_id}/transactions` | 顧客直近取引明細照会 (limit指定可能) | ◯ (JWT) | `application/json` |
+| `POST` | `/api/core/extract-account-info` | AIアシスタント向け勘定系コンテキスト抽出API | ◯ (Internal / Microservice) | `application/json` |
+| `GET` | `/api/faq/search` | 楽天銀行FAQナレッジ ハイブリッドベクトル検索API | 不要 / ◯ | `application/json` |
+| `GET` | `/api/control-plane/logs` | 改ざん防止監査ログ一覧照会 (直近25件) | ◯ (Admin / FISC Audit) | `application/json` |
+| `GET` | `/api/health` | コンテナヘルスチェック & LLM/勘定系接続状態照会 | 不要 | `application/json` |
 
 ---
 
@@ -87,7 +87,21 @@ data: {"type": "completion", "grounding_score": 0.98, "audit_id": "AUDIT-2026082
 
 ---
 
-## 3. エラーコード定義 (Standard HTTP Error Codes)
+## 3. エラーコード定義 & RFC 7807 Problem Details 仕様
+
+システム全体で統一されたエラーレスポンス構造（RFC 7807準拠）です。
+
+```json
+{
+  "type": "https://api.megabank.co.jp/errors/STEP_UP_REQUIRED",
+  "title": "Step-Up Multi-Factor Authentication Required",
+  "status": 403,
+  "detail": "振込等の重要取引操作にはインターネットバンキングでの追加多要素認証が必要です。",
+  "instance": "/api/chat/stream",
+  "code": "STEP_UP_REQUIRED",
+  "timestamp": "2026-08-21T01:13:00.000Z"
+}
+```
 
 | HTTPステータス | エラーコード | 説明 / 原因 |
 |---|---|---|
