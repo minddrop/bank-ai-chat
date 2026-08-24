@@ -12,9 +12,6 @@
   - [ADR-0001: Japanese Banking Compliance & Control Planes](../../adr/0001-japanese-banking-compliance-and-control-planes.md)
   - [ADR-0009: DLP Security Guardrails & Compliance Framework](../../adr/0009-dlp-security-guardrails-and-compliance-framework.md)
   - [ADR-0012: In-VPC Salted Tokenization Vault](../../adr/0012-in-vpc-salted-tokenization-vault.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 2.1, 4)
-  - [`docs/security_dlp_guardrails_requirements.md`](../security_dlp_guardrails_requirements.md) (Sec 1, 2)
 - **実装マッピング**:
   - [`src/control_plane/input_guardrail.py`](file:///home/joe/src/bank-ai-chat/src/control_plane/input_guardrail.py)
   - [`src/control_plane/output_guardrail.py`](file:///home/joe/src/bank-ai-chat/src/control_plane/output_guardrail.py)
@@ -70,6 +67,8 @@ flowchart LR
 3. **二重漏洩防止スキャナ（Output Guardrail Scanner）**:
    - LLMが生成したレスポンスに対しても、再度PII正規表現スキャナを実行。
    - 万が一LLMが学習データや推論から7桁口座番号を出力した場合、`[口座番号保護]` に即時再置換し、CloudWatchへセキュリティ警告ログ（`PII_LEAK_PREVENTED`）を送信します。
+4. **APPI 3年ごと見直し法改正対応・暗号アジリティ（Cryptographic Agility）**:
+   - 個人情報保護法およびPQC（耐量子暗号化）への移行指針に備え、トークン化ハッシュアルゴリズム（HMAC-SHA256からSHA-3 / ML-KEM等）の差し替えが可能なプラグインインターフェース構造を採用。
 
 ---
 
