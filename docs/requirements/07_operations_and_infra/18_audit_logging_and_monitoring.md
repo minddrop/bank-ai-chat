@@ -11,9 +11,6 @@
 - **関連ADR**:
   - [ADR-0009: DLP Security Guardrails & Compliance Framework](../../adr/0009-dlp-security-guardrails-and-compliance-framework.md)
   - [ADR-0018: Production Observability CloudWatch Alarms & Security Telemetry Targets](../../adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md)
-- **ベースライン文書**: 
-  - [`docs/requirements_definition.md`](../requirements_definition.md) (Sec 9)
-  - [`docs/security_dlp_guardrails_requirements.md`](../security_dlp_guardrails_requirements.md) (Sec 6)
 - **実装マッピング**:
   - [`src/control_plane/audit_logger.py`](file:///home/joe/src/bank-ai-chat/src/control_plane/audit_logger.py)
   - [`data/audit_logs.json`](file:///home/joe/src/bank-ai-chat/data/audit_logs.json)
@@ -33,6 +30,11 @@ flowchart LR
     S3 --> WORM["S3 Object Lock (COMPLIANCE Mode: 10年保護)"]
     LOGGER --> CW["Amazon CloudWatch Logs & Metrics"]
 ```
+
+### 1.1 マルチアカウント統制 & ログ集約アカウント連携 (AWS Organizations)
+本番エンタープライズ構成においては、アプリケーション運用アカウント（Workload Account）とセキュリティ監査アカウント（Log Archive Account）を物理分離します：
+- **S3 Cross-Account Replication (CRR)**: 対話ログ生成直後、専用KMS CMKで再暗号化され、特権管理者でも削除不可能なLog Archive AccountのWORMバケットへ自動非同期レプリケーション。
+- **改ざん検知アラート**: ハッシュ不一致または署名欠落を検知した場合、SecurityHubおよびPagerDutyへP1インシデントを発報。
 
 ---
 
