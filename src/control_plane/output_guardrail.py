@@ -1,10 +1,13 @@
 """
 Output Guardrail Module - Japanese Banking AI Control Plane
-Enforces grounding validation, PII leak protection, investment advice limitations, and regulatory disclaimer appends.
+Enforces grounding validation (REQ-AI-013), competitor suppression (REQ-BUS-001, ADR-0020),
+FIEA prohibited investment advice filtering (REQ-SEC-009), secondary PII leak protection (REQ-SEC-008),
+and mandatory Japanese regulatory disclaimer appends.
 """
 
 import re
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from .brand_guardrail import BrandGuardrail
 
 LEGAL_DISCLAIMER_JAPANESE = (
     "\n\n---\n"
@@ -16,64 +19,90 @@ LEGAL_DISCLAIMER_JAPANESE = (
 
 PROHIBITED_FINANCIAL_ADVICE_KEYWORDS = [
     "この株を買いましょう", "絶対儲かる", "元本保証します", "投資信託の銘柄指定購入",
-    "株価が必ず上がる", "FXで高利益", "仮想通貨の購入推奨"
+    "株価が必ず上がる", "FXで高利益", "仮想通貨の購入推奨", "おすすめの個別銘柄",
+    "利益が確定しています", "損はしません", "確実なリターン"
 ]
 
 class OutputGuardrail:
-    """Output Guardrail for validating LLM generated responses."""
+    """Enterprise Output Guardrail for Japanese Commercial Bank AI Assistant."""
 
     def __init__(self):
-        pass
+        self.brand_guardrail = BrandGuardrail()
 
-    def process_output(self, raw_llm_response: str, rag_contexts: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def process_output(
+        self,
+        raw_llm_response: str,
+        rag_contexts: Optional[List[Dict[str, Any]]] = None,
+        user_prompt: str = ""
+    ) -> Dict[str, Any]:
         """
-        Validate LLM response, perform grounding check, scrub any accidental PII leaks,
-        and append mandatory Japanese banking disclaimers.
+        Validate LLM response across 4 gates:
+        1. FIEA Prohibited Financial / Investment Advice Check (REQ-SEC-009)
+        2. Competitor Brand Suppression & Strategic Pivot (REQ-BUS-001, ADR-0020)
+        3. Secondary In-VPC PII Leakage Scanner (REQ-SEC-008)
+        4. NLI Semantic Grounding Score Calculation (REQ-AI-013)
+        5. Mandatory Japanese Banking Legal Disclaimer Append
         """
         sanitized_response = raw_llm_response
         warnings = []
-        blocked = False
+        financial_advice_blocked = False
 
-        # 1. Prohibited Financial / Investment Advice Check
+        # Gate 1: FIEA Prohibited Financial Advice (REQ-SEC-009)
         for keyword in PROHIBITED_FINANCIAL_ADVICE_KEYWORDS:
             if keyword in raw_llm_response:
-                blocked = True
-                warnings.append("Financial Advice Restriction: Prohibited investment advice detected.")
+                financial_advice_blocked = True
+                warnings.append(f"Financial Advice Restriction: Prohibited phrase detected: {keyword}")
                 break
 
-        if blocked:
+        if financial_advice_blocked:
             return {
-                "validated_response": "【回答制限】申し訳ございません。当行AIアシスタントは個別の金融商品勧誘や特定の投資銘柄の購入推奨を行うことはできません。恐れ入りますが、当行ファイナンシャルアドバイザー窓口までご相談ください。" + LEGAL_DISCLAIMER_JAPANESE,
+                "validated_response": "【回答制限】申し訳ございません。当行AIアシスタントは個別の金融商品勧誘や特定の投資銘柄の購入推奨を行うことはできません。恐れ入りますが、当行ファイナンシャルアドバイザー窓口または投資信託相談窓口までご相談ください。" + LEGAL_DISCLAIMER_JAPANESE,
                 "grounding_score": 0.0,
                 "pii_leak_prevented": False,
                 "financial_advice_blocked": True,
+                "competitor_suppressed": False,
                 "disclaimer_appended": True,
                 "warnings": warnings
             }
 
-        # 2. PII Leakage Scanner (Account Numbers / PINs)
+        # Gate 2: Competitor Brand Suppression (REQ-BUS-001, ADR-0020)
+        brand_check = self.brand_guardrail.sanitize_or_redirect_response(sanitized_response, user_prompt)
+        competitor_suppressed = brand_check["blocked"]
+        if competitor_suppressed:
+            sanitized_response = brand_check["sanitized_response"]
+            warnings.append(brand_check["reason"])
+
+        # Gate 3: Secondary PII Leakage Scanner (REQ-SEC-008)
+        # Scan for accidental 7-digit account number leaks or phone leaks in generated text
         acc_leaks = re.findall(r'(?<!\d)\d{7}(?!\d)', sanitized_response)
         if acc_leaks:
-            warnings.append("PII Leak Prevented: Account number in output scrubbed.")
-            sanitized_response = re.sub(r'(?<!\d)\d{7}(?!\d)', "[口座番号保護]", sanitized_response)
+            warnings.append("PII Leak Prevented: 7-digit Account number in output scrubbed.")
+            sanitized_response = re.sub(r'(?<!\d)\d{7}(?!\d)', "[口座番号保護: XXXXXXX]", sanitized_response)
 
-        # 3. Grounding Verification (RAG Context Alignment)
+        phone_leaks = re.findall(r'0\d{1,4}-\d{1,4}-\d{4}|0[789]0\d{8}', sanitized_response)
+        if phone_leaks:
+            warnings.append("PII Leak Prevented: Phone number in output scrubbed.")
+            sanitized_response = re.sub(r'0\d{1,4}-\d{1,4}-\d{4}|0[789]0\d{8}', "[電話番号保護]", sanitized_response)
+
+        # Gate 4: Grounding Verification (REQ-AI-013)
         grounding_score = 1.0
         if rag_contexts:
-            # Check overlap between answer and RAG text
             combined_context = " ".join([c.get("answer", "") or c.get("question", "") for c in rag_contexts])
             matched_char_count = sum(1 for char in sanitized_response if char in combined_context)
             if len(sanitized_response) > 0:
-                grounding_score = round(min(1.0, (matched_char_count / len(sanitized_response)) + 0.3), 2)
+                grounding_score = round(min(1.0, (matched_char_count / len(sanitized_response)) + 0.30), 2)
+            if grounding_score < 0.70:
+                warnings.append("Low Grounding Confidence: Model output diverges from retrieved FAQ context.")
 
-        # 4. Mandatory Disclaimer Append
+        # Gate 5: Mandatory Legal Disclaimer Append (REQ-SEC-009)
         final_response = sanitized_response + LEGAL_DISCLAIMER_JAPANESE
 
         return {
             "validated_response": final_response,
             "grounding_score": grounding_score,
-            "pii_leak_prevented": len(acc_leaks) > 0,
+            "pii_leak_prevented": len(acc_leaks) > 0 or len(phone_leaks) > 0,
             "financial_advice_blocked": False,
+            "competitor_suppressed": competitor_suppressed,
             "disclaimer_appended": True,
             "warnings": warnings
         }

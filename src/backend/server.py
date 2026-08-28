@@ -166,13 +166,16 @@ class BankPortalRequestHandler(SimpleHTTPRequestHandler):
             # 1. Input Guardrail Execution
             in_eval = input_guardrail.process_input(message)
             if not in_eval["allowed"]:
+                blocked_msg = in_eval.get("rejection_message")
+                if not blocked_msg:
+                    blocked_msg = f"【セキュリティ制御】{in_eval.get('reason')}。当行のセキュリティ規約に基づき処理を停止いたしました。"
                 out_blocked = {
-                    "validated_response": f"【セキュリティ制御】{in_eval.get('reason')}。当行のセキュリティ規約に基づき処理を停止いたしました。",
+                    "validated_response": blocked_msg,
                     "grounding_score": 0.0,
                     "pii_leak_prevented": False,
                     "financial_advice_blocked": False,
                     "disclaimer_appended": True,
-                    "warnings": ["Prompt Injection Attempt Blocked by Input Guardrail"]
+                    "warnings": [f"Input Guardrail Intervention: {in_eval.get('reason')}"]
                 }
                 audit_logger.log_event(
                     session_id=session_id,
