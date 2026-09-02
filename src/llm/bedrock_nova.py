@@ -227,8 +227,9 @@ class BedrockNovaLiteClient:
         # FAQ Retrieval Intent
         if rag_contexts:
             top_faq = rag_contexts[0]
+            ans_text = top_faq.get('answer', '').replace("楽天銀行", "当行")
             res = f"お問合せいただきました「{top_faq.get('question')}」につきまして、以下の通りご案内いたします。\n\n"
-            res += f"{top_faq.get('answer')}\n\n"
+            res += f"{ans_text}\n\n"
             res += f"関連する手続きにつきましては、当行Webサイト（{top_faq.get('url')}）もあわせてご参照ください。"
             return res
 

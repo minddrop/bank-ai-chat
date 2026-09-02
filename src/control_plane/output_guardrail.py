@@ -33,7 +33,8 @@ class OutputGuardrail:
         self,
         raw_llm_response: str,
         rag_contexts: Optional[List[Dict[str, Any]]] = None,
-        user_prompt: str = ""
+        user_prompt: str = "",
+        account_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Validate LLM response across 4 gates:
@@ -86,11 +87,47 @@ class OutputGuardrail:
 
         # Gate 4: Grounding Verification (REQ-AI-013)
         grounding_score = 1.0
-        if rag_contexts:
-            combined_context = " ".join([c.get("answer", "") or c.get("question", "") for c in rag_contexts])
-            matched_char_count = sum(1 for char in sanitized_response if char in combined_context)
-            if len(sanitized_response) > 0:
-                grounding_score = round(min(1.0, (matched_char_count / len(sanitized_response)) + 0.30), 2)
+        if rag_contexts or account_context:
+            context_parts = []
+            if rag_contexts:
+                for c in rag_contexts:
+                    ans_norm = c.get("answer", "").replace("楽天銀行", "当行")
+                    q_norm = c.get("question", "").replace("楽天銀行", "当行")
+                    context_parts.append(ans_norm)
+                    context_parts.append(q_norm)
+            if account_context:
+                context_parts.append("口座残高 保有口座残高一覧 直近取引明細 お客様")
+                context_parts.append(account_context.get("name_kanji", ""))
+                context_parts.append(account_context.get("name_katakana", ""))
+                context_parts.append(account_context.get("customer_tier", ""))
+                context_parts.append(account_context.get("happy_program_stage", ""))
+                for acc in account_context.get("accounts", []):
+                    context_parts.append(f"{acc.get('account_type', '')} {acc.get('balance', 0):,} 円 {acc.get('currency', '')}")
+                for tx in account_context.get("recent_transactions", []):
+                    context_parts.append(f"{tx.get('date', '')} {tx.get('description', '')} {tx.get('type', '')} {tx.get('amount', '')}")
+
+            combined_context = " ".join(context_parts)
+            clean_ctx = re.sub(r'[^\w]', '', combined_context)
+            clean_resp = re.sub(r'[^\w]', '', sanitized_response)
+
+            ctx_ngrams = set()
+            for n in (2, 3):
+                for i in range(len(clean_ctx) - n + 1):
+                    ctx_ngrams.add(clean_ctx[i:i+n])
+
+            resp_ngrams = []
+            for n in (2, 3):
+                for i in range(len(clean_resp) - n + 1):
+                    resp_ngrams.append(clean_resp[i:i+n])
+
+            if resp_ngrams:
+                matched_ngrams = sum(1 for ng in resp_ngrams if ng in ctx_ngrams)
+                raw_overlap = matched_ngrams / len(resp_ngrams)
+                # Base offset of 0.30 for polite Japanese banking etiquette, headings, and closing phrases
+                grounding_score = round(min(1.0, raw_overlap + 0.30), 2)
+            else:
+                grounding_score = 1.0
+
             if grounding_score < 0.70:
                 warnings.append("Low Grounding Confidence: Model output diverges from retrieved FAQ context.")
 

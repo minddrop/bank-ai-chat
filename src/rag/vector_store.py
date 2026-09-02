@@ -20,7 +20,7 @@ class VectorStore:
         self.load_data()
 
     def load_data(self):
-        """Load FAQ items from JSON file with metadata support."""
+        """Load FAQ items from JSON file with metadata support and precompute token index."""
         if os.path.exists(self.faq_path):
             with open(self.faq_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -31,6 +31,22 @@ class VectorStore:
                     self.documents = data
                     self.metadata = {}
 
+        # Precompute token frequency index for fast retrieval
+        self._doc_index = []
+        for doc in self.documents:
+            q_counts = {}
+            for t in self._tokenize(doc.get('question', '')):
+                q_counts[t] = q_counts.get(t, 0) + 1
+            cat_counts = {}
+            for t in self._tokenize(doc.get('category', '')):
+                cat_counts[t] = cat_counts.get(t, 0) + 1
+            ans_counts = {}
+            for t in self._tokenize(doc.get('answer', '')):
+                ans_counts[t] = ans_counts.get(t, 0) + 1
+
+            total_tokens = len(q_counts) * 4 + len(cat_counts) * 2 + len(ans_counts) * 0.5
+            norm_denom = max(1.0, math.sqrt(total_tokens))
+            self._doc_index.append((doc, q_counts, cat_counts, ans_counts, norm_denom))
 
     def _tokenize(self, text: str) -> List[str]:
         """Simple Japanese character & word n-gram tokenizer."""
@@ -53,18 +69,7 @@ class VectorStore:
             return self.documents[:top_k]
 
         scored_docs = []
-        for doc in self.documents:
-            q_tokens = self._tokenize(doc.get('question', ''))
-            cat_tokens = self._tokenize(doc.get('category', ''))
-            ans_tokens = self._tokenize(doc.get('answer', ''))
-            
-            q_counts = {}
-            for t in q_tokens: q_counts[t] = q_counts.get(t, 0) + 1
-            cat_counts = {}
-            for t in cat_tokens: cat_counts[t] = cat_counts.get(t, 0) + 1
-            ans_counts = {}
-            for t in ans_tokens: ans_counts[t] = ans_counts.get(t, 0) + 1
-            
+        for doc, q_counts, cat_counts, ans_counts, norm_denom in self._doc_index:
             score = 0
             for qt in query_tokens:
                 if qt in q_counts:
@@ -74,9 +79,7 @@ class VectorStore:
                 if qt in ans_counts:
                     score += ans_counts[qt] * 0.5
 
-            total_tokens = len(q_tokens) * 4 + len(cat_tokens) * 2 + len(ans_tokens) * 0.5
-            norm_score = score / max(1, math.sqrt(total_tokens))
-            
+            norm_score = score / norm_denom
             scored_docs.append((norm_score, doc))
 
 
