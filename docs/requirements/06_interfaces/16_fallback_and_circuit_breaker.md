@@ -10,6 +10,7 @@
 - **関連ADR**:
   - [ADR-0008: Decoupled Core Banking Database & API](../../adr/0008-decoupled-core-banking-database-and-api.md)
   - [ADR-0019: Local LLM Provider & Fallback Architecture](../../adr/0019-local-llm-provider-and-fallback-architecture.md)
+  - [ADR-0022: Cross-Region DR, Fault Tolerance & Main Banking Independence](../../adr/0022-cross-region-disaster-recovery-and-fault-tolerance-architecture.md)
 - **実装マッピング**:
   - [`src/core_banking/client.py`](file:///home/joe/src/bank-ai-chat/src/core_banking/client.py)
   - [`src/llm/local_llm.py`](file:///home/joe/src/bank-ai-chat/src/llm/local_llm.py)
@@ -32,6 +33,18 @@ stateDiagram-v2
     Bedrock_Degraded --> Local_Fallback_Engine : ローカルルールベースエンジン切替
     Local_Fallback_Engine --> Normal_Mode : Bedrock復旧
 ```
+
+### 1.2 銀行本丸機能の非停止性・完全独立保証 (Main Banking Operational Independence)
+
+日本の銀行法第13条（業務の適切性）およびFISC安全対策基準に基づき、本AIアシスタントは銀行本丸業務に対して以下の**「ゼロ影響・完全疎結合設計（Zero-Blast-Radius Guarantee）」**を保証します：
+
+1. **厳格な片方向データ参照（Unidirectional Dependency）**:
+   - 勘定系（Core Banking）およびインターネットバンキング本体は、AIアシスタントに対して一切の依存関係（呼出、待機、プロキシ）を持ちません。
+   - AIチャットのコンテナ、制御プレーン、Bedrock、OpenSearch等の**全コンポーネントが完全停止・ハングアップ・無応答となった場合でも、銀行本体の振込・入出金・ATM・ネットバンキング取引機能は1ミリ秒も停止せず、0%の影響で正常稼働を継続します**。
+2. **AIチャット内トランザクション実行の完全禁止**:
+   - 振込、暗証番号変更、定期解約などの法的重要取引はAIチャット内では一切実行不能であり、公式ダイレクトバンキング画面へのディープリンク案内のみを行います（ADR-0014準拠）。
+3. **勘定系リソース保護のフェイルセーフ**:
+   - AI側からの過大アクセスやハングによる勘定系スレッド枯渇を防ぐため、1.5秒タイムアウトとサーキットブレーカー（OPEN）により、AI側の不調が勘定系に波及することを物理的・論理的に100%遮断します。
 
 ---
 
@@ -75,11 +88,23 @@ AWS Bedrock認証情報のないローカル開発環境やオフライン隔離
 
 ---
 
-## 3. サーキットブレーカー構成パラメータ
+## 3. サーキットブレーカー構成パラメータ & ヘルスチェック仕様
 
+### 3.1 サーキットブレーカー閾値パラメータ
 - **Failure Rate Threshold**: 50% (直近10リクエスト中5回失敗で作動)
 - **Wait Duration in Open State**: **30秒**
 - **Automatic Self-Healing (Half-Open)**: 30秒後に試行リクエストを1件送信し、成功すれば `CLOSED`（正常）に自動復帰。
+
+### 3.2 2段階ヘルスチェック仕様 (Shallow vs. Deep Health Checks)
+縮退運用中の意図せぬコンテナ再起動や誤ったDNSフェイルオーバーを防止するため、ヘルスチェックを役割に応じて2系統に完全分離します：
+
+1. **Shallow Liveness Check (`GET /api/health/liveness` または `/api/health`)**:
+   - **用途**: ALBターゲットグループ監視およびECSタスク再起動判定。
+   - **判定仕様**: FastAPIプロセスおよびPythonランタイムが生存していれば、勘定系サーキットブレーカーが `OPEN`（縮退中）であっても **常に HTTP 200** を返却。
+   - **理由**: 勘定系が停止していてもAIアシスタントはFAQ応答を正常継続できるため、コンテナを異常終了させない。
+2. **Deep Readiness Check (`GET /api/health/readiness`)**:
+   - **用途**: Route 53 Application Recovery Controller (ARC) による大阪DRリージョン切替判定。
+   - **判定仕様**: Bedrock Nova LiteおよびOpenSearch Serverlessの両系が完全到達不能となった場合のみ **HTTP 503** を返却し、広域DNSフェイルオーバーをトリガー。
 
 ---
 
@@ -87,3 +112,5 @@ AWS Bedrock認証情報のないローカル開発環境やオフライン隔離
 
 - [x] `tests/test_local_llm.py` を実行し、AWS Bedrock未接続状態でもローカルフォールバックエンジンが正確な残高・ステージ案内を生成できること。
 - [x] 勘定系DBを停止させた状態でチャットAPIを呼び出した際、500 Internal Server Errorにならず、適切な縮退案内メッセージが返却されること。
+- [x] 勘定系サーキットブレーカーがOPEN状態であっても、`/api/health` がHTTP 200を維持し、ALBから切り離されないこと。
+- [x] AIチャットプロセスが完全に停止した場合でも、ダイレクトバンキングの口座照会・振込画面疎通に一切の影響がないことが検証されていること。

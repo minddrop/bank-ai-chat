@@ -11,9 +11,11 @@
 - **関連ADR**:
   - [ADR-0007: Production AWS Detailed Design Specification](../../adr/0007-production-aws-detailed-design-specification.md)
   - [ADR-0016: Deterministic Terraform IaC Architecture & Remote State Management](../../adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md)
+  - [ADR-0022: Cross-Region DR, Fault Tolerance & Main Banking Independence](../../adr/0022-cross-region-disaster-recovery-and-fault-tolerance-architecture.md)
 - **実装マッピング**:
   - Terraform IaC モジュール定義
   - [`Dockerfile`](file:///home/joe/src/bank-ai-chat/Dockerfile)
+  - [`terraform/environments/prod/`](file:///home/joe/src/bank-ai-chat/terraform/environments/prod/)
 
 ---
 
@@ -69,6 +71,19 @@ graph TD
 | `sg_bank_ai_opensearch`| Ingress | 受信 | `sg_bank_ai_ecs` | TCP 443 (HTTPS) | ECSタスクからのベクトル検索のみ許可 |
 | `sg_bank_ai_vpce` | Ingress | 受信 | `sg_bank_ai_ecs` | TCP 443 (HTTPS) | ECSタスクからのAWSサービスAPI呼出 |
 
+### 1.3 副系ディザスタリカバリ (DR) リージョン仕様 (AWS Osaka `ap-northeast-3`) (ADR-0022準拠)
+
+東京リージョンの広域災害（首都直下地震、広域送電網停止等）に備え、同一国内の地理的分散拠点として **AWS大阪 (`ap-northeast-3`)** を副系DRリージョンに選定します。
+
+1. **VPC CIDR 設計**:
+   - 大阪DR VPC: `10.101.0.0/16` (東京本番 `10.100.0.0/16` とアドレス重複なし)
+   - サブネット構成: Public (`10.101.1.0/24`, `10.101.2.0/24`), Private App (`10.101.11.0/24`, `10.101.12.0/24`), Isolated Data (`10.101.21.0/24`, `10.101.22.0/24`)
+2. **スタンバイ運用モデル (Pilot Light)**:
+   - ECS Fargate: 最小1タスクのパイロットライト待機（平常時はコスト最小化）。
+   - 被災昇格時: Route 53 Application Recovery Controller (ARC) のフェイルオーバー操作により、10タスクへ即時ステップスケール。
+3. **データ主権適合性**:
+   - 全コンピュート・ストレージが日本法管轄下（国内）で完結し、FISC安全対策基準および個人情報保護法（APPI）に100%適合。
+
 ---
 
 ## 2. Terraform IaC設計規約 & リソース仕様 (ADR-0016準拠)
@@ -83,12 +98,13 @@ graph TD
 ```
 terraform/
 ├── environments/
-│   ├── dev/
-│   ├── stg/
-│   └── prod/
+│   ├── dev/             # 東京 開発環境
+│   ├── stg/             # 東京 ステージング環境
+│   ├── prod/            # 東京 本番プライマリ環境 (ap-northeast-1)
+│   └── dr-osaka/        # 大阪 本番セカンダリDR環境 (ap-northeast-3 / ADR-0022)
 └── modules/
     ├── vpc/             # 3-Tier VPC, Subnets, Route Tables, NAT
-    ├── security/        # Security Groups, KMS CMK, IAM Roles
+    ├── security/        # Security Groups, KMS CMK / MRK, IAM Roles
     ├── ecs/             # ECS Cluster, Fargate Task Definition, Service
     ├── opensearch/      # OpenSearch Serverless Collection, Access Policies
     ├── alb/             # ALB, Target Groups, ACM Certificates
@@ -140,3 +156,4 @@ terraform/
 - [x] `terraform plan` においてエラーおよび想定外のリソース差分が発生しないこと。
 - [x] すべてのセキュリティグループが最小権限（Least Privilege）で厳格にポート制限されていること。
 - [x] CI/CDパイプラインにおいて全15テストおよびセキュリティスキャンがパスすること。
+- [x] 大阪DRリージョン (`ap-northeast-3`) のインフラ定義が東京本番と同一モジュールから決定論的に適用可能であること。

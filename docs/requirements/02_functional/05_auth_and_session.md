@@ -10,9 +10,10 @@
   - NIST SP 800-63B (Digital Identity Guidelines: Authentication and Lifecycle Management)
 - **関連ADR**:
   - [ADR-0014: Zero Trust Step-Up Authentication Boundary](../../adr/0014-zero-trust-step-up-authentication-boundary.md)
+  - [ADR-0022: Cross-Region DR, Fault Tolerance & Main Banking Independence](../../adr/0022-cross-region-disaster-recovery-and-fault-tolerance-architecture.md)
 - **実装マッピング**:
   - [`src/backend/app.py`](file:///home/joe/src/bank-ai-chat/src/backend/app.py)
-  - [`src/backend/server.py`](file:///home/joe/src/bank-ai-chat/src/backend/server.py)
+  - [`src/backend/auth.py`](file:///home/joe/src/bank-ai-chat/src/backend/auth.py)
 
 ---
 
@@ -49,6 +50,10 @@ stateDiagram-v2
    - 各セッションは顧客ID単位で厳格に分離され、異なる顧客のコンテキストがメモリやプロンプトに混入することを防止。
 3. **明示的ログアウト・トークン無効化**:
    - 顧客が「ログアウト」を選択した際、JWTは直ちにブラックリスト（Redis / In-memory）に登録され無効化。
+4. **本番厳格認証モード (`REQUIRE_STRICT_AUTH`) & 銀行本体セッション非干渉**:
+   - **本番環境 (`prod`)**: 環境変数 `REQUIRE_STRICT_AUTH=true` を適用し、`/api/chat` および `/api/chat/stream` への全アクセスに有効なJWT Bearerトークンを強制（未認証リクエストは即座に `401 Unauthorized` 返却）。
+   - **開発・検証環境 (`dev`)**: シミュレータおよび自動テストの利便性のため、未認証でもデモ顧客コンテキストで動作を許容。
+   - **銀行本体セッションとの非干渉**: AIチャットトークンの失効やセッションタイムアウトが発生しても、インターネットバンキング本体のログインセッションには一切影響を与えません。
 
 ---
 
@@ -70,5 +75,6 @@ stateDiagram-v2
 
 ## 4. 受入テスト検証基準 (Acceptance Criteria)
 
-- [x] トークンなし、または期限切れJWTでの `/api/chat/stream` 呼び出しに対し、`401 Unauthorized` が返却されること。
+- [x] トークンなし、または期限切れJWTでの `/api/chat/stream` 呼び出しに対し、`401 Unauthorized` が返却されること (`tests/test_api_endpoints.py`)。
 - [x] 「振込をして」「暗証番号を変更して」という入力に対し、チャット実行がブロックされ、正しい `STEP_UP_REQUIRED` レスポンスとリダイレクトURLが提示されること。
+- [x] AIチャットのトークン失効時でも、ダイレクトバンキング本体のセッションが維持されること。
