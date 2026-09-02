@@ -5,3 +5,9 @@ data/audit_logs.json
 *.db
 *.log
 
+# Excluded reports & executive briefs
+docs/WEEKLY_MANAGEMENT_REPORT.md
+docs/weekly_management_report.md
+*weekly_management_report*
+*WEEKLY_MANAGEMENT_REPORT*
+
