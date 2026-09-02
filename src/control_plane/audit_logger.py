@@ -11,11 +11,19 @@ from typing import Dict, Any, List
 
 AUDIT_LOG_FILE = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "audit_logs.json"))
 
-class AuditLogger:
-    """FISC compliant audit logger for AI interactions and control plane events."""
 
-    def __init__(self, log_path: str = AUDIT_LOG_FILE):
+class AuditStorageExhaustedException(Exception):
+    """Raised when Audit Logger buffer is exhausted and cannot safely persist records (FISC P0 Blocker)."""
+    pass
+
+
+class AuditLogger:
+    """FISC compliant audit logger with in-memory retry buffer and fail-closed safety."""
+
+    def __init__(self, log_path: str = AUDIT_LOG_FILE, max_buffer_capacity: int = 1000):
         self.log_path = log_path
+        self.max_buffer_capacity = max_buffer_capacity
+        self._retry_buffer: List[Dict[str, Any]] = []
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
         if not os.path.exists(self.log_path):
             with open(self.log_path, 'w', encoding='utf-8') as f:
@@ -62,18 +70,61 @@ class AuditLogger:
             }
         }
 
-        # Append to log file
+        # Check for chaos injection: AUDIT_STORAGE_FAILURE
+        chaos_active = False
+        try:
+            from chaos.fault_injector import FaultInjector
+            chaos_active = FaultInjector.is_scenario_active("AUDIT_STORAGE_FAILURE")
+        except ImportError:
+            pass
+
+        if chaos_active:
+            self._buffer_entry(log_entry)
+            return log_entry
+
+        # Attempt writing to log file (or flush previous buffered items first)
         try:
             with open(self.log_path, 'r+', encoding='utf-8') as f:
                 logs = json.load(f)
+                # Flush retry buffer if any entries were pending
+                if self._retry_buffer:
+                    logs.extend(self._retry_buffer)
+                    self._retry_buffer.clear()
                 logs.append(log_entry)
                 f.seek(0)
                 json.dump(logs, f, ensure_ascii=False, indent=2)
                 f.truncate()
         except Exception as e:
-            print(f"Error appending audit log: {e}")
+            # Persistent storage failure: Buffer in memory (REQ-NFR-007 Phase 5 Buffer Mode)
+            self._buffer_entry(log_entry)
 
         return log_entry
+
+    def _buffer_entry(self, entry: Dict[str, Any]):
+        """Queue log entry in resilient memory buffer; fail closed if capacity exceeded."""
+        if len(self._retry_buffer) >= self.max_buffer_capacity:
+            raise AuditStorageExhaustedException(
+                f"FISC Audit storage failure: memory buffer limit ({self.max_buffer_capacity}) exceeded. System failing closed."
+            )
+        self._retry_buffer.append(entry)
+
+    def get_buffer_size(self) -> int:
+        """Get number of pending log entries in retry buffer."""
+        return len(self._retry_buffer)
+
+    def flush_buffer(self) -> int:
+        """Manually flush buffered entries to persistent storage."""
+        if not self._retry_buffer:
+            return 0
+        with open(self.log_path, 'r+', encoding='utf-8') as f:
+            logs = json.load(f)
+            flushed_count = len(self._retry_buffer)
+            logs.extend(self._retry_buffer)
+            self._retry_buffer.clear()
+            f.seek(0)
+            json.dump(logs, f, ensure_ascii=False, indent=2)
+            f.truncate()
+        return flushed_count
 
     def get_recent_logs(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Retrieve recent audit logs for the governance dashboard."""
@@ -83,3 +134,4 @@ class AuditLogger:
                 return logs[-limit:]
         except Exception:
             return []
+

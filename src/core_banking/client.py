@@ -147,13 +147,33 @@ class CoreBankingClient:
                 return cached_val
 
         # Step 2: Check Circuit Breaker State
+        try:
+            from chaos.fault_injector import FaultInjector
+            if FaultInjector.is_scenario_active("CORE_BANKING_CIRCUIT_TRIP"):
+                self.circuit_breaker.trip_open_manually()
+            if FaultInjector.is_scenario_active("CORE_BANKING_DB_CRASH"):
+                self.circuit_breaker.record_failure()
+                raise ConnectionRefusedError("Core Banking database connection refused (503 Service Unavailable)")
+        except ImportError:
+            pass
+
         if not self.circuit_breaker.can_execute():
             raise CoreBankingCircuitBreakerOpenException(
                 f"Core Banking Circuit Breaker is OPEN (state: {self.circuit_breaker.state.value})"
             )
 
         # Step 3: Execute with 1.5s Timeout
-        future = self.executor.submit(func, *args, **kwargs)
+        def resilient_call():
+            try:
+                from chaos.fault_injector import FaultInjector
+                FaultInjector.inject_latency("CORE_BANKING_TIMEOUT", duration_seconds=self.call_timeout + 0.5)
+            except ImportError:
+                pass
+            return func(*args, **kwargs)
+
+        import contextvars
+        ctx = contextvars.copy_context()
+        future = self.executor.submit(ctx.run, resilient_call)
         try:
             result = future.result(timeout=self.call_timeout)
             self.circuit_breaker.record_success()

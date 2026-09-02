@@ -61,6 +61,15 @@ class VectorStore:
 
     def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """Search top K relevant FAQ entries using cosine TF-IDF similarity."""
+        # Chaos Injection Hook
+        try:
+            from chaos.fault_injector import FaultInjector
+            FaultInjector.inject_latency("RAG_OPENSEARCH_TIMEOUT", duration_seconds=1.5)
+            if FaultInjector.is_scenario_active("RAG_INDEX_CORRUPT"):
+                return []
+        except ImportError:
+            pass
+
         if not self.documents:
             self.load_data()
 

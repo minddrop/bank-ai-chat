@@ -48,16 +48,45 @@ class BedrockNovaLiteClient:
         account_context: Dict[str, Any] = None,
         rag_contexts: List[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Generate response using Amazon Nova Lite model or Local LLM Client."""
+        start_time = time.time()
+
+        # Chaos Fault Injections (FISC Resilience Verification)
+        try:
+            from chaos.fault_injector import FaultInjector
+            FaultInjector.inject_latency("BEDROCK_LATENCY_SPIKE", duration_seconds=2.5)
+
+            if FaultInjector.is_scenario_active("BEDROCK_429_THROTTLING"):
+                latency = int((time.time() - start_time) * 1000) + 150
+                if self._local_client:
+                    res = self._local_client.generate_response(sanitized_prompt, account_context, rag_contexts)
+                    res["provider"] = "Local LLM Fallback (Bedrock 429 Failover)"
+                    return res
+                return {
+                    "text": "ただいまAI応答エンジンが混雑しております。恐れ入りますが、しばらく経ってから再度お試しいただくか、お急ぎの場合はテレフォンバンキング（0120-123-456）をご利用ください。",
+                    "model": "fallback:rate-limit-mitigation",
+                    "provider": "Amazon Bedrock (429 Throttled Fallback)",
+                    "latency_ms": latency,
+                    "tokens": {"input": len(sanitized_prompt), "output": 85}
+                }
+
+            if FaultInjector.is_scenario_active("BEDROCK_OUTAGE_500"):
+                latency = int((time.time() - start_time) * 1000) + 200
+                return {
+                    "text": "ただいまAI対話基盤の定期点検中または一時的な通信障害が発生しております。大変恐れ入りますが、お取引や緊急のお問い合わせはテレフォンバンキング（0120-123-456）または公式取引窓口をご利用ください。",
+                    "model": "fallback:service-outage-handler",
+                    "provider": "Amazon Bedrock (500 Outage Fallback)",
+                    "latency_ms": latency,
+                    "tokens": {"input": len(sanitized_prompt), "output": 95}
+                }
+        except ImportError:
+            pass
+
         # 0. Local LLM Provider execution if configured
         if self._local_client or os.environ.get("LLM_PROVIDER", "").lower() in ["local", "ollama"]:
             if not self._local_client:
                 from llm.local_llm import LocalLLMClient
                 self._local_client = LocalLLMClient()
             return self._local_client.generate_response(sanitized_prompt, account_context, rag_contexts)
-
-        start_time = time.time()
-
 
         # Build context prompt
         context_str = ""

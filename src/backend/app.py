@@ -12,7 +12,7 @@ import json
 import os
 import sys
 from typing import Dict, Any, Optional, AsyncGenerator
-from fastapi import FastAPI, HTTPException, Request, Header
+from fastapi import FastAPI, HTTPException, Request, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,12 +23,20 @@ sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
 from control_plane.input_guardrail import InputGuardrail
 from control_plane.output_guardrail import OutputGuardrail
-from control_plane.audit_logger import AuditLogger
+from control_plane.audit_logger import AuditLogger, AuditStorageExhaustedException
 from rag.vector_store import VectorStore
 from llm import get_llm_client
 from core_banking.service import CoreBankingService
 from core_banking.client import CoreBankingClient
 from backend.auth import auth_manager, AuthManager
+from chaos import (
+    ChaosMiddleware,
+    chaos_manager,
+    ChaosScenario,
+    FaultInjector,
+    SteadyStateEvaluator,
+    is_chaos_enabled
+)
 
 app = FastAPI(
     title="Japanese Major Bank AI Assistant API",
@@ -44,6 +52,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Register Chaos Engineering Middleware (REQ-NFR-007, FISC Contingency Standard)
+app.add_middleware(ChaosMiddleware)
 
 # Initialize singletons
 input_guardrail = InputGuardrail()
@@ -87,6 +97,22 @@ async def problem_details_handler(request: Request, exc: BankingProblemDetailExc
         "timestamp": timestamp
     }
     return JSONResponse(status_code=exc.status_code, content=payload, media_type="application/problem+json")
+
+
+@app.exception_handler(AuditStorageExhaustedException)
+async def audit_storage_exhausted_handler(request: Request, exc: AuditStorageExhaustedException):
+    instance_path = request.url.path
+    timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    payload = {
+        "type": "https://api.megabank.co.jp/errors/AUDIT_STORAGE_EXHAUSTED",
+        "title": "FISC Audit Trail Storage Full",
+        "status": 503,
+        "detail": str(exc),
+        "instance": instance_path,
+        "code": "AUDIT_STORAGE_EXHAUSTED",
+        "timestamp": timestamp
+    }
+    return JSONResponse(status_code=503, content=payload, media_type="application/problem+json")
 
 
 @app.exception_handler(HTTPException)
@@ -134,11 +160,23 @@ class StepUpRequest(BaseModel):
     action_type: Optional[str] = "FUND_TRANSFER"
     message: Optional[str] = "振込取引手続き"
 
+class ChaosEnableRequest(BaseModel):
+    scenario: str = Field(..., description="Target chaos scenario identifier")
+    config: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Scenario parameters")
+
+class ChaosSimulateRequest(BaseModel):
+    scenario: str = Field(..., description="Scenario to simulate")
+    customer_id: Optional[str] = Field(default="CUST-1001", description="Test customer ID")
+    message: Optional[str] = Field(default="普通預金残高を教えてください", description="Test user query")
+
+
+REQUIRE_STRICT_AUTH = os.environ.get("REQUIRE_STRICT_AUTH", "false").lower() in ("true", "1", "yes")
 
 def verify_request_auth(authorization: Optional[str], require_auth: bool = False) -> Optional[Dict[str, Any]]:
     """Helper to validate JWT token when present or required."""
+    effective_require = require_auth or REQUIRE_STRICT_AUTH
     if not authorization:
-        if require_auth:
+        if effective_require:
             raise BankingProblemDetailException(
                 status_code=401,
                 code="AUTH_EXPIRED",
@@ -176,6 +214,47 @@ def health_check():
         "llm_model": model_name,
         "core_banking_status": "CONNECTED" if cb_state == "CLOSED" else f"CIRCUIT_{cb_state}",
         "circuit_breaker": cb_state
+    }
+
+@app.get("/api/health/liveness")
+def health_liveness():
+    """Shallow liveness probe for ALB target groups and ECS container restarts.
+    Returns HTTP 200 as long as FastAPI runtime is alive, even when upstream services are degraded."""
+    return {
+        "status": "ALIVE",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    }
+
+@app.get("/api/health/readiness")
+def health_readiness(response: Response):
+    """Deep readiness probe for Route 53 Application Recovery Controller (ARC).
+    Evaluates upstream dependencies; returns HTTP 503 if system is fully unready to serve."""
+    cb_state = core_banking_client.circuit_breaker.state.value
+    provider_type = os.environ.get("LLM_PROVIDER", "bedrock").lower()
+    
+    is_ready = True
+    reasons = []
+
+    # If circuit breaker is OPEN and LLM client is failing, flag as UNREADY for global DNS routing
+    if cb_state == "OPEN" and getattr(llm_client, "is_failing", False):
+        is_ready = False
+        reasons.append("Core banking circuit breaker is OPEN and LLM is unavailable")
+
+    if not is_ready:
+        response.status_code = 503
+        return {
+            "status": "UNREADY",
+            "reasons": reasons,
+            "circuit_breaker": cb_state,
+            "llm_provider": provider_type,
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        }
+
+    return {
+        "status": "READY",
+        "circuit_breaker": cb_state,
+        "llm_provider": provider_type,
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
 @app.get("/.well-known/appspecific/com.chrome.devtools.json")
@@ -264,6 +343,124 @@ def get_audit_logs():
 
 
 # ==============================================================================
+# Chaos Engineering & FISC Resilience Endpoints (REQ-NFR-007, ADR-0023)
+# ==============================================================================
+
+@app.get("/api/chaos/scenarios")
+def list_chaos_scenarios():
+    """List all supported chaos scenarios and their FISC compliance definitions."""
+    return {
+        "enabled": is_chaos_enabled(),
+        "scenarios": chaos_manager.list_available_scenarios()
+    }
+
+
+@app.get("/api/chaos/status")
+def get_chaos_status():
+    """Get active chaos scenarios and resilient subsystem health."""
+    active_list = [
+        {
+            "experiment_id": exp.experiment_id,
+            "scenario": exp.scenario,
+            "name_ja": exp.scenario_name_ja,
+            "target": exp.target_component,
+            "started_at": exp.started_at
+        }
+        for exp in chaos_manager.active_experiments.values()
+    ]
+    return {
+        "chaos_enabled": is_chaos_enabled(),
+        "active_experiment_count": len(active_list),
+        "active_experiments": active_list,
+        "audit_buffer_size": audit_logger.get_buffer_size(),
+        "circuit_breaker_state": core_banking_client.circuit_breaker.state.value
+    }
+
+
+@app.post("/api/chaos/enable")
+def enable_chaos_scenario(req: ChaosEnableRequest):
+    """Enable a chaos scenario globally for testing or GameDay exercises."""
+    if not is_chaos_enabled():
+        raise HTTPException(status_code=403, detail="Chaos Engineering is disabled in this environment")
+    FaultInjector.enable_global_scenario(req.scenario, req.config or {})
+    return {"status": "ENABLED", "scenario": req.scenario.upper()}
+
+
+@app.post("/api/chaos/disable")
+def disable_chaos_scenario(req: ChaosEnableRequest):
+    """Disable a global chaos scenario."""
+    FaultInjector.disable_global_scenario(req.scenario)
+    return {"status": "DISABLED", "scenario": req.scenario.upper()}
+
+
+@app.post("/api/chaos/reset")
+def reset_chaos_scenarios():
+    """Reset all active chaos faults and stop running experiments."""
+    chaos_manager.stop_all_experiments()
+    FaultInjector.reset_all_faults()
+    return {"status": "ALL_FAULTS_RESET"}
+
+
+@app.post("/api/chaos/simulate")
+def simulate_chaos_scenario(req: ChaosSimulateRequest):
+    """
+    Run an end-to-end simulated interaction under a specific chaos scenario,
+    automatically evaluating FISC steady-state invariants.
+    """
+    scenario_enum = None
+    for s in ChaosScenario:
+        if s.value.upper() == req.scenario.upper():
+            scenario_enum = s
+            break
+    if not scenario_enum:
+        raise HTTPException(status_code=400, detail=f"Unknown scenario: {req.scenario}")
+
+    def test_run():
+        chat_req = ChatRequest(
+            session_id=f"CHAOS-SIM-{int(datetime.datetime.now().timestamp())}",
+            customer_id=req.customer_id or "CUST-1001",
+            message=req.message or "普通預金残高を教えてください"
+        )
+        return chat_endpoint(chat_req, authorization=None)
+
+    record = chaos_manager.run_single_experiment(scenario_enum, test_run)
+    return {
+        "experiment_id": record.experiment_id,
+        "scenario": record.scenario,
+        "name_ja": record.scenario_name_ja,
+        "status": record.status,
+        "duration_seconds": record.duration_seconds,
+        "baseline_latency_ms": record.baseline_latency_ms,
+        "chaos_latency_ms": record.chaos_latency_ms,
+        "degradation_observed": record.degradation_observed,
+        "steady_state_report": record.steady_state_report,
+        "error_message": record.error_message
+    }
+
+
+@app.get("/api/chaos/steady-state")
+def check_steady_state():
+    """Evaluate current system health against all steady-state invariants."""
+    health_data = health_check()
+    report = SteadyStateEvaluator.evaluate_response(health_data, status_code=200)
+    return {
+        "is_healthy": report.is_healthy,
+        "fisc_compliance_status": report.fisc_compliance_status,
+        "passed_checks": report.passed_checks,
+        "failed_checks": report.failed_checks,
+        "results": [
+            {
+                "invariant": r.invariant_name,
+                "passed": r.passed,
+                "details": r.details,
+                "severity": r.severity
+            }
+            for r in report.results
+        ]
+    }
+
+
+# ==============================================================================
 # AI Chat Endpoints: SSE Streaming & Synchronous (REQ-IF-015, REQ-FUN-006)
 # ==============================================================================
 
@@ -348,11 +545,20 @@ async def chat_stream_endpoint(
         rag_context_ids = [m.get("id") for m in rag_matches if m.get("id")]
 
         # Step 3: LLM Generation (Bedrock Nova Lite or Local LLM Client fallback)
-        llm_res = llm_client.generate_response(
-            sanitized_prompt=in_eval["sanitized_prompt"],
-            account_context=customer_account,
-            rag_contexts=rag_matches
-        )
+        try:
+            llm_res = llm_client.generate_response(
+                sanitized_prompt=in_eval["sanitized_prompt"],
+                account_context=customer_account,
+                rag_contexts=rag_matches
+            )
+        except Exception:
+            llm_res = {
+                "text": "ただいまAI対話基盤の定期点検中または通信障害が発生しております。大変恐れ入りますが、お取引や緊急のお問い合わせはテレフォンバンキング（0120-123-456）または公式取引窓口をご利用ください。",
+                "model": "fallback:resilient-apology",
+                "provider": "Resilience Fallback Engine",
+                "latency_ms": 100,
+                "tokens": {"input": len(in_eval["sanitized_prompt"]), "output": 80}
+            }
 
         # Step 4: Output Guardrail Execution (Grounding score, FIEA filtering, PII scan)
         out_eval = output_guardrail.process_output(
@@ -487,11 +693,20 @@ def chat_endpoint(
     rag_context_ids = [m.get("id") for m in rag_matches if m.get("id")]
 
     # Step 3: LLM Generation (Bedrock Nova Lite or Local LLM Client)
-    llm_res = llm_client.generate_response(
-        sanitized_prompt=in_eval["sanitized_prompt"],
-        account_context=customer_account,
-        rag_contexts=rag_matches
-    )
+    try:
+        llm_res = llm_client.generate_response(
+            sanitized_prompt=in_eval["sanitized_prompt"],
+            account_context=customer_account,
+            rag_contexts=rag_matches
+        )
+    except Exception:
+        llm_res = {
+            "text": "ただいまAI対話基盤の定期点検中または通信障害が発生しております。大変恐れ入りますが、お取引や緊急のお問い合わせはテレフォンバンキング（0120-123-456）または公式取引窓口をご利用ください。",
+            "model": "fallback:resilient-apology",
+            "provider": "Resilience Fallback Engine",
+            "latency_ms": 100,
+            "tokens": {"input": len(in_eval["sanitized_prompt"]), "output": 80}
+        }
 
     # Step 4: Output Guardrail Execution
     out_eval = output_guardrail.process_output(

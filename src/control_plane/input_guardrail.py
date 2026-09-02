@@ -96,6 +96,13 @@ class InputGuardrail:
         5. In-VPC Salted PII Tokenization Vault (APPI Compliance)
         """
         original = user_prompt
+        # Chaos Injection Hook (FISC Fail-Closed verification)
+        try:
+            from chaos.fault_injector import FaultInjector
+            FaultInjector.inject_latency("GUARDRAIL_LATENCY_SPIKE", duration_seconds=0.25)
+        except ImportError:
+            pass
+
         normalized = self.normalize_input(user_prompt)
         sanitized = normalized
         pii_found = []

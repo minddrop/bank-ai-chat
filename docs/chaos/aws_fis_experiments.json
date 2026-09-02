@@ -1,0 +1,80 @@
+{
+  "experiments": [
+    {
+      "id": "exp-fargate-multi-az-termination",
+      "description": "FISC GameDay Drill: Random ECS Task Termination in ap-northeast-1a to verify ALB Multi-AZ Failover",
+      "fisc_reference": "FISC安全対策基準 第9版 システム信頼性基準 §1.1",
+      "targets": {
+        "FargateTasksInAzA": {
+          "resourceType": "aws:ecs:task",
+          "resourceTags": {
+            "AvailabilityZone": "ap-northeast-1a"
+          },
+          "selectionMode": "COUNT(1)",
+          "parameters": {
+            "cluster": "arn:aws:ecs:ap-northeast-1:123456789012:cluster/bank-ai-cluster",
+            "service": "bank-ai-service"
+          }
+        }
+      },
+      "actions": {
+        "StopTaskAction": {
+          "actionId": "aws:ecs:stop-task",
+          "parameters": {},
+          "targets": {
+            "Tasks": "FargateTasksInAzA"
+          }
+        }
+      },
+      "stopConditions": [
+        {
+          "source": "aws:cloudwatch:alarm",
+          "value": "arn:aws:cloudwatch:ap-northeast-1:123456789012:alarm:BankAi-ALB-5XX-Critical"
+        }
+      ],
+      "roleArn": "arn:aws:iam::123456789012:role/bank-ai-chaos-fis-execution-role",
+      "tags": {
+        "Compliance": "FISC-Safety-Std-9",
+        "System": "BankAIChat"
+      }
+    },
+    {
+      "id": "exp-ecs-cpu-stress-step-scaling",
+      "description": "FISC GameDay Drill: Inject 90% CPU stress on ECS tasks to verify Step-Scaling from 2 to 10 tasks under 1,000 TPS spike",
+      "fisc_reference": "FISC安全対策基準 第9版 システム信頼性・キャパシティ管理基準 §1.0",
+      "targets": {
+        "FargateContainers": {
+          "resourceType": "aws:ec2:instance",
+          "resourceTags": {
+            "System": "BankAIChat"
+          },
+          "selectionMode": "PERCENT(50)"
+        }
+      },
+      "actions": {
+        "CpuStress": {
+          "actionId": "aws:ssm:send-command",
+          "parameters": {
+            "documentArn": "arn:aws:ssm:ap-northeast-1::document/AWSFIS-Run-CPU-Stress",
+            "documentParameters": "{\"DurationSeconds\": \"180\", \"CPU\": \"90\"}",
+            "duration": "PT3M"
+          },
+          "targets": {
+            "Instances": "FargateContainers"
+          }
+        }
+      },
+      "stopConditions": [
+        {
+          "source": "aws:cloudwatch:alarm",
+          "value": "arn:aws:cloudwatch:ap-northeast-1:123456789012:alarm:BankAi-ALB-5XX-Critical"
+        }
+      ],
+      "roleArn": "arn:aws:iam::123456789012:role/bank-ai-chaos-fis-execution-role",
+      "tags": {
+        "Compliance": "FISC-Safety-Std-9",
+        "System": "BankAIChat"
+      }
+    }
+  ]
+}
