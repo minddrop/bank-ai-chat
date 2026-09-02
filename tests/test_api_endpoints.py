@@ -30,6 +30,21 @@ class TestApiEndpoints(unittest.TestCase):
         self.assertTrue(data["fisc_compliance"])
         self.assertEqual(data["circuit_breaker"], "CLOSED")
 
+    def test_health_liveness_endpoint(self):
+        res = self.client.get("/api/health/liveness")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "ALIVE")
+        self.assertIn("timestamp", data)
+
+    def test_health_readiness_endpoint(self):
+        res = self.client.get("/api/health/readiness")
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "READY")
+        self.assertEqual(data["circuit_breaker"], "CLOSED")
+        self.assertIn("timestamp", data)
+
     def test_issue_auth_token_endpoint(self):
         payload = {"customer_id": "CUST-1001", "tier": "SUPER_VIP"}
         res = self.client.post("/api/auth/token", json=payload)
