@@ -33,6 +33,15 @@ An enterprise-grade, 24/7/365 digital banking assistant deployed on AWS Tokyo (`
 7. **FISC Security & Tamper-Evident Audit Logging**
    - Cryptographic SHA-256 signed audit logging stored in AWS Tokyo (`ap-northeast-1`) with S3 Object Lock 10-year WORM compliance and AWS KMS AES-256 encryption.
 
+8. **Cross-Region Disaster Recovery & Main Banking Independence (REQ-OPS-017, ADR-0022)**
+   - **Zero-Blast-Radius Guarantee**: Unidirectional read-only decoupling guarantees that core banking, ATMs, and direct internet banking transactions never stop operating even if all AI chat components completely collapse.
+   - **Domestic DR Topology (Tokyo $\rightarrow$ Osaka)**: AWS Osaka (`ap-northeast-3`) pilot-light standby with Route 53 ARC DNS failover, KMS Multi-Region Keys (`mrk-`), and asynchronous S3 Cross-Region Replication (CRR) ensuring FISC and APPI data sovereignty.
+
+9. **Chaos Engineering & FISC Resilience Framework (FISC 第9版, ADR-0023)**
+   - **In-VPC Fault Injection Subsystem (`src/chaos/`)**: Simulates real-world banking failures including Core Banking 1.5s latency spikes, database connection drops, Amazon Bedrock 429 throttling / 500 regional outages, and audit log storage backpressure.
+   - **Automated Steady-State Invariant Evaluation**: Continuously validates non-negotiable invariants: Zero-PII leakage (APPI), clean RFC 7807 problem details, and 100% SHA-256 audit signature generation.
+   - **GameDay Playbook & AWS FIS Templates**: Includes GameDay runbooks (`docs/operations/chaos_gameday_runbook.md`), AWS Fault Injection Service (FIS) templates (`terraform/modules/chaos/`, `docs/chaos/`), and an interactive CLI tool (`scripts/run_chaos_experiment.py`).
+
 ---
 
 ## 📁 Repository Structure
@@ -44,21 +53,25 @@ bank-ai-chat/
 ├── README_JA.md                      # Japanese README (日本語)
 ├── data/                             # Production synthetic bank accounts & Rakuten FAQ datasets
 ├── docs/                             # AWS Architecture, Detailed Specification, CI/CD, Costs, & adr/
-│   ├── adr/                          # Architectural Decision Records (ADR-0001 - ADR-0021)
+│   ├── adr/                          # Architectural Decision Records (ADR-0001 - ADR-0023)
+│   ├── chaos/                        # AWS Fault Injection Service (FIS) experiment templates
+│   ├── operations/                   # GameDay operational runbooks (chaos_gameday_runbook.md)
 │   └── requirements/                 # Enterprise Requirements Suite (18 specifications)
-├── scripts/                          # FAQ crawler, database tools, & grounding benchmark CLI
-│   └── evaluate_grounding.py         # 100-pair golden dataset grounding evaluation runner
-├── src/                              # Backend, Control Plane, Core Banking, Frontend, LLM, RAG
-│   ├── backend/                      # FastAPI, SSE streaming, JWT Auth & Step-Up MFA, RFC 7807
+├── scripts/                          # FAQ crawler, database tools, grounding benchmark & chaos CLI
+│   ├── evaluate_grounding.py         # 100-pair golden dataset grounding evaluation runner
+│   └── run_chaos_experiment.py       # Standalone Chaos Engineering & Disaster Recovery CLI
+├── src/                              # Backend, Chaos, Control Plane, Core Banking, Frontend, LLM, RAG
+│   ├── backend/                      # FastAPI, SSE streaming, JWT Auth & Step-Up MFA, RFC 7807, Chaos endpoints
+│   ├── chaos/                        # Fault injector, steady-state evaluator, manager, middleware
 │   ├── control_plane/                # In-VPC Input & Output Guardrails, Brand, AML, Audit Logger
 │   ├── core_banking/                 # Synthetic banking DB & resilient client with Circuit Breaker
 │   ├── frontend/                     # Simulator UI & User Portal with real-time SSE & Step-Up cards
-│   ├── llm/                          # Bedrock Nova Lite & Local LLM client engines
+│   ├── llm/                          # Bedrock Nova Lite & Local LLM client engines with chaos hooks
 │   └── rag/                          # Pre-indexed TF-IDF / OpenSearch vector search store
 ├── terraform/                        # Deterministic Terraform IaC Suite (REQ-OPS-017)
-│   ├── environments/                 # Root environment configs (dev, prod) with S3 remote state
-│   └── modules/                      # Reusable modules (vpc, security, alb, waf, opensearch, ecs)
-└── tests/                            # 60 automated unit & integration tests
+│   ├── environments/                 # Root environment configs (dev, prod, dr-osaka) with S3 remote state
+│   └── modules/                      # Reusable modules (vpc, security, alb, waf, opensearch, ecs, chaos)
+└── tests/                            # 76 automated unit, integration, & chaos resilience tests
 ```
 
 ---
@@ -124,11 +137,24 @@ Featuring:
 ---
 
 ### 🧪 Running Automated Unit & Compliance Tests
-Run the automated test suite across control planes, RAG engines, circuit breakers, and SSE endpoints:
+Run the 76-test automated suite across control planes, RAG engines, circuit breakers, and SSE endpoints:
 ```bash
 uv run pytest
 # or using python virtual environment:
 PYTHONPATH=src ./.venv/bin/pytest tests/ -v
+```
+
+### 🌪️ Running Chaos Engineering & FISC Resilience Drills
+Execute automated GameDay fault injection drills and steady-state evaluations:
+```bash
+# 1. Run the full automated chaos test suite (16 test cases)
+./.venv/bin/pytest tests/test_chaos_engineering.py -v
+
+# 2. Execute GameDay drill CLI against local or staging endpoints
+./.venv/bin/python3 scripts/run_chaos_experiment.py --scenario all
+
+# 3. List all 12 supported FISC chaos scenarios
+./.venv/bin/python3 scripts/run_chaos_experiment.py --list
 ```
 
 ### 📊 Running Grounding Benchmark Evaluation (REQ-AI-013)

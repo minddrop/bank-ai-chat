@@ -33,6 +33,15 @@
 7. **FISC安全対策基準準拠のセキュリティ＆改ざん防止監査**
    - AWS KMS (AES-256) 暗号化、S3 Object Lock（10年WORM保持）、およびSHA-256ハッシュ署名付きの改ざん防止監査ログをAWS東京リージョン内に保持。
 
+8. **広域ディザスタリカバリ (DR) ＆ 銀行本丸機能の非停止性保証 (REQ-OPS-017, ADR-0022)**
+   - **ゼロ影響・完全疎結合保証**: AIチャットの全コンポーネントが完全停止・ハングアップした場合でも、銀行本体の振込・入出金・ATM・ネットバンキング取引機能は1ミリ秒も停止せず、0%の影響で正常稼働を継続します。
+   - **国内完結型DRトポロジ (東京 $\rightarrow$ 大阪)**: FISC・個人情報保護法のデータ主権に基づき、国内地理的分散拠点として **AWS大阪 (`ap-northeast-3`)** パイロットライト待機、Route 53 ARC自動DNS切替、KMSマルチリージョンキー (`mrk-`)、およびS3 Cross-Region Replication (CRR) 非同期監査ログ複製を配備。
+
+9. **カオスエンジニアリング＆FISCレジリエンス検証フレームワーク (FISC第9版, ADR-0023)**
+   - **In-VPC 障害注入サブシステム (`src/chaos/`)**: 勘定系1.5秒タイムアウト、DB接続断、Amazon Bedrock 429レート制限・500リージョン障害、および監査ログストレージ障害時のインメモリバッファ退避を自動注入。
+   - **定常状態不変条件（Steady-State Invariants）の常時評価**: 個人情報保護法（APPI）に基づくPII漏洩ゼロ、RFC 7807適合、およびSHA-256改ざん検知署名保全を自動検査。
+   - **GameDay運用手順書＆AWS FIS連携**: 災害対策訓練手順書（`docs/operations/chaos_gameday_runbook.md`）、AWS Fault Injection Service (FIS) テンプレート（`terraform/modules/chaos/`, `docs/chaos/`）、およびCLI実行ツール（`scripts/run_chaos_experiment.py`）を完備。
+
 ---
 
 ## 📁 ディレクトリ構造
@@ -44,21 +53,25 @@ bank-ai-chat/
 ├── README_JA.md                      # 日本語版 README
 ├── data/                             # 合成口座データ & FAQデータセット
 ├── docs/                             # AWSアーキテクチャ・詳細設計書・CI/CD・コスト試算・ADR
-│   ├── adr/                          # 建築決定記録 (ADR-0001 - ADR-0021)
+│   ├── adr/                          # 建築決定記録 (ADR-0001 - ADR-0023)
+│   ├── chaos/                        # AWS Fault Injection Service (FIS) 実験テンプレート
+│   ├── operations/                   # GameDay災害対策運用手順書 (chaos_gameday_runbook.md)
 │   └── requirements/                 # エンタープライズ要件定義スイート (18仕様書)
-├── scripts/                          # FAQクローラー & グラウンディング評価ベンチマークCLI
-│   └── evaluate_grounding.py         # 100件ゴールデンFAQデータセット評価スクリプト
-├── src/                              # バックエンド・コントロールプレーン・勘定系・フロントエンド・LLM・RAG
-│   ├── backend/                      # FastAPI, SSEストリーミング, JWT認証＆MFA, RFC 7807
+├── scripts/                          # FAQクローラー & グラウンディング評価・カオスCLI
+│   ├── evaluate_grounding.py         # 100件ゴールデンFAQデータセット評価スクリプト
+│   └── run_chaos_experiment.py       # カオスエンジニアリング＆GameDay訓練実行CLI
+├── src/                              # バックエンド・カオス・コントロールプレーン・勘定系・フロントエンド・LLM・RAG
+│   ├── backend/                      # FastAPI, SSEストリーミング, JWT認証＆MFA, RFC 7807, カオスAPI
+│   ├── chaos/                        # 障害注入エンジン, 不変条件評価, マネージャー, ミドルウェア
 │   ├── control_plane/                # In-VPC 入出力ガードレール, ブランド保護, AML, 監査ログ
 │   ├── core_banking/                 # 勘定系合成DB & サーキットブレーカー付き耐障害クライアント
 │   ├── frontend/                     # シミュレータUI & 顧客ポータル (SSE & MFAカード対応)
-│   ├── llm/                          # Bedrock Nova Lite & ローカルLLMエンジン
+│   ├── llm/                          # Bedrock Nova Lite & ローカルLLMエンジン (カオスフック付き)
 │   └── rag/                          # 事前インデックス済みTF-IDF / OpenSearchベクトル検索
 ├── terraform/                        # 決定論的Terraform IaC構成スイート (REQ-OPS-017)
-│   ├── environments/                 # 環境ルート定義 (dev, prod) & S3リモートステート
-│   └── modules/                      # 再利用可能モジュール (vpc, security, alb, waf, opensearch, ecs)
-└── tests/                            # 60件の自動単体・統合テストスイート
+│   ├── environments/                 # 環境ルート定義 (dev, prod, dr-osaka) & S3リモートステート
+│   └── modules/                      # 再利用可能モジュール (vpc, security, alb, waf, opensearch, ecs, chaos)
+└── tests/                            # 76件の自動単体・統合・カオスレジリエンステストスイート
 ```
 
 ---
@@ -125,11 +138,24 @@ docker-compose up --build
 ---
 
 ### 🧪 自動テストの実行
-コントロールプレーン、RAGエンジン、サーキットブレーカー、SSEストリーミングをカバーする全60件の自動テストを実行します:
+コントロールプレーン、RAGエンジン、サーキットブレーカー、SSEストリーミング、およびカオス工学耐性を含む全76件の自動テストを実行します:
 ```bash
 uv run pytest
 # または仮想環境のpytest直接実行:
 PYTHONPATH=src ./.venv/bin/pytest tests/ -v
+```
+
+### 🌪️ カオスエンジニアリング＆FISC耐障害性訓練の実行
+計画的な障害注入訓練（GameDay）および定常状態不変条件の自動検証を実行します:
+```bash
+# 1. カオス工学自動テストスイートの実行（16テスト）
+./.venv/bin/pytest tests/test_chaos_engineering.py -v
+
+# 2. ローカルまたはステージング環境に対するGameDay訓練CLIの実行
+./.venv/bin/python3 scripts/run_chaos_experiment.py --scenario all
+
+# 3. カタログ化された全12のFISCカオスシナリオ一覧を表示
+./.venv/bin/python3 scripts/run_chaos_experiment.py --list
 ```
 
 ### 📊 グラウンディング評価ベンチマークの実行 (REQ-AI-013)
