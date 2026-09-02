@@ -297,11 +297,13 @@ async function sendChatPrompt(promptText) {
   // Append User Message to UI
   appendChatMessage('user', promptText);
 
-  // Append AI Loading Indicator
-  const loadingId = appendChatLoading();
+  // Append streaming AI message container
+  const aiMsgDiv = appendChatMessage('ai', '');
+  const pTag = aiMsgDiv.querySelector('.msg-bubble p');
+  let fullAiText = '';
 
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -311,22 +313,87 @@ async function sendChatPrompt(promptText) {
       })
     });
 
-    const data = await res.json();
-    removeChatLoading(loadingId);
+    if (!res.ok) {
+      throw new Error(`SSE stream failed with status ${res.status}`);
+    }
 
-    const replyText = data.reply || '申し訳ございません。処理中にエラーが発生いたしました。';
-    appendChatMessage('ai', replyText);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          if (event.type === 'content_chunk') {
+            fullAiText += event.delta;
+            pTag.innerHTML = fullAiText.replace(/\n/g, '<br>');
+            const container = document.getElementById('user-chat-messages');
+            if (container) container.scrollTop = container.scrollHeight;
+          } else if (event.type === 'step_up_required') {
+            renderUserStepUpActionWidget(aiMsgDiv, event.payload);
+          }
+        } catch (err) {
+          console.debug('SSE parse skip:', err);
+        }
+      }
+    }
 
   } catch (err) {
-    console.error('Chat API Error:', err);
-    removeChatLoading(loadingId);
-    appendChatMessage('ai', '通信エラーが発生いたしました。サーバー接続をご確認ください。');
+    console.warn('SSE stream error, falling back to /api/chat:', err);
+    try {
+      const fallbackRes = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: `SESS-USER-${Date.now()}`,
+          customer_id: currentCustomer.customer_id,
+          message: promptText
+        })
+      });
+      const data = await fallbackRes.json();
+      pTag.innerHTML = (data.reply || '').replace(/\n/g, '<br>');
+      if (data.status === 'STEP_UP_REQUIRED' && data.step_up) {
+        renderUserStepUpActionWidget(aiMsgDiv, data.step_up);
+      }
+    } catch (fallbackErr) {
+      console.error('Chat API Error:', fallbackErr);
+      pTag.textContent = '通信エラーが発生いたしました。サーバー接続をご確認ください。';
+    }
   }
+}
+
+function renderUserStepUpActionWidget(msgDiv, payload) {
+  if (!msgDiv || !payload) return;
+  const bubble = msgDiv.querySelector('.msg-bubble');
+  if (!bubble || bubble.querySelector('.step-up-action-card')) return;
+
+  const card = document.createElement('div');
+  card.className = 'step-up-action-card';
+  card.innerHTML = `
+    <div class="step-up-header">
+      <span class="step-up-badge">要・多要素認証 (Step-Up MFA)</span>
+      <span class="step-up-action">${payload.target_action || '重要取引'}</span>
+    </div>
+    <p class="step-up-text">${payload.message}</p>
+    <a href="${payload.redirect_url}" target="_blank" rel="noopener noreferrer" class="step-up-redirect-btn">
+      🔒 公式インターネットバンキング取引画面へ進む
+    </a>
+  `;
+  bubble.appendChild(card);
 }
 
 function appendChatMessage(sender, text) {
   const container = document.getElementById('user-chat-messages');
-  if (!container) return;
+  if (!container) return null;
 
   const msgDiv = document.createElement('div');
   msgDiv.className = `chat-message msg-${sender}`;
@@ -347,6 +414,7 @@ function appendChatMessage(sender, text) {
 
   container.appendChild(msgDiv);
   container.scrollTop = container.scrollHeight;
+  return msgDiv;
 }
 
 function appendChatLoading() {

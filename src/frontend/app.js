@@ -324,8 +324,13 @@ async function handleChatSubmit(e) {
   const sendBtn = document.getElementById('send-btn');
   sendBtn.disabled = true;
 
+  // Create streaming AI message placeholder
+  const aiMsgDiv = appendMessage('ai', '');
+  const pTag = aiMsgDiv.querySelector('.message-body p');
+  let fullAiText = '';
+
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -335,23 +340,97 @@ async function handleChatSubmit(e) {
       })
     });
 
-    const data = await res.json();
-    appendMessage('ai', data.reply);
-
-    // Update Control Plane Inspector
-    if (data.control_plane) {
-      updateControlPlaneMonitor(data.control_plane);
+    if (!res.ok) {
+      throw new Error(`Streaming failed with status ${res.status}`);
     }
 
-    // Refresh Audit Stream
-    await refreshAuditLogs();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop(); // retain partial line
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          if (event.type === 'guardrail_status') {
+            if (event.input_guardrail) {
+              updateControlPlaneMonitor({ input_guardrail: event.input_guardrail });
+            }
+          } else if (event.type === 'step_up_required') {
+            renderStepUpActionWidget(aiMsgDiv, event.payload);
+          } else if (event.type === 'content_chunk') {
+            fullAiText += event.delta;
+            pTag.innerHTML = escapeHtml(fullAiText).replace(/\n/g, '<br>');
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+          } else if (event.type === 'completion') {
+            if (event.control_plane) {
+              updateControlPlaneMonitor(event.control_plane);
+            }
+            await refreshAuditLogs();
+          }
+        } catch (err) {
+          console.debug('SSE event parsing skip:', err);
+        }
+      }
+    }
 
   } catch (err) {
-    console.error('Chat error:', err);
-    appendMessage('ai', '通信エラーが発生いたしました。サーバー接続をご確認ください。');
+    console.warn('SSE streaming error, falling back to /api/chat:', err);
+    try {
+      const fallbackRes = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: 'SESS-' + Date.now(),
+          customer_id: selectedCustomer ? selectedCustomer.customer_id : 'CUST-1001',
+          message: text
+        })
+      });
+      const data = await fallbackRes.json();
+      pTag.innerHTML = escapeHtml(data.reply).replace(/\n/g, '<br>');
+      if (data.status === 'STEP_UP_REQUIRED' && data.step_up) {
+        renderStepUpActionWidget(aiMsgDiv, data.step_up);
+      }
+      if (data.control_plane) {
+        updateControlPlaneMonitor(data.control_plane);
+      }
+      await refreshAuditLogs();
+    } catch (fallbackErr) {
+      console.error('Chat error:', fallbackErr);
+      pTag.textContent = '通信エラーが発生いたしました。サーバー接続をご確認ください。';
+    }
   } finally {
     sendBtn.disabled = false;
   }
+}
+
+function renderStepUpActionWidget(msgDiv, payload) {
+  if (!msgDiv || !payload) return;
+  const body = msgDiv.querySelector('.message-body');
+  if (!body || body.querySelector('.step-up-action-card')) return;
+
+  const card = document.createElement('div');
+  card.className = 'step-up-action-card';
+  card.innerHTML = `
+    <div class="step-up-header">
+      <span class="step-up-badge">要・多要素認証 (Step-Up MFA)</span>
+      <span class="step-up-action">${escapeHtml(payload.target_action || '重要取引')}</span>
+    </div>
+    <p class="step-up-text">${escapeHtml(payload.message)}</p>
+    <a href="${escapeHtml(payload.redirect_url)}" target="_blank" rel="noopener noreferrer" class="step-up-redirect-btn">
+      🔒 公式インターネットバンキング取引画面へ進む
+    </a>
+  `;
+  body.appendChild(card);
 }
 
 function appendMessage(role, text) {
@@ -371,6 +450,7 @@ function appendMessage(role, text) {
 
   container.appendChild(msgDiv);
   container.scrollTop = container.scrollHeight;
+  return msgDiv;
 }
 
 function updateControlPlaneMonitor(cp) {

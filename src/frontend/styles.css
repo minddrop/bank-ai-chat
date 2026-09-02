@@ -848,3 +848,65 @@ body {
   color: var(--accent-teal);
   white-space: pre-wrap;
 }
+
+/* Step-Up MFA Action Card (REQ-FUN-005 & REQ-FUN-006) */
+.step-up-action-card {
+  margin-top: 12px;
+  background: rgba(217, 119, 6, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-up-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-up-badge {
+  background: #f59e0b;
+  color: #0f172a;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.step-up-action {
+  color: #fcd34d;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.step-up-text {
+  font-size: 0.82rem;
+  color: #f1f5f9;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.step-up-redirect-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #ffffff !important;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 6px;
+  margin-top: 4px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.3);
+}
+
+.step-up-redirect-btn:hover {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  transform: translateY(-1px);
+}
