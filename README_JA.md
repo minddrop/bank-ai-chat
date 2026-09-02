@@ -5,7 +5,7 @@
 
 > **言語切り替え / Language Switch**: [English](README.md) | [日本語 (Japanese)](README_JA.md)
 
-本プロジェクトは、AWS東京リージョン（`ap-northeast-1`）上に構築された、日本の個人向けデジタルバンキング顧客対応用のエンタープライズAIチャットシステムです。Amazon Bedrock (Amazon Nova Lite `amazon.nova-lite-v1:0`)、Amazon OpenSearch ServiceによるRAG検索、およびIn-VPCデュアルコントロールプレーンアーキテクチャを活用しています。
+本プロジェクトは、AWS東京リージョン（`ap-northeast-1`）上に構築された、日本の個人向けデジタルバンキング顧客対応用のエンタープライズAIチャットシステムです。Amazon Bedrock (Amazon Nova Lite `amazon.nova-lite-v1:0`)、Amazon OpenSearch ServiceによるRAG検索、In-VPCデュアルコントロールプレーンガードレール、高耐障害性の勘定系サーキットブレーカー、および決定論的Terraform IaC構成を活用しています。
 
 ---
 
@@ -15,15 +15,23 @@
    - 信頼性の高い顧客対応を実現するため、自然で丁寧な日本語敬語（丁寧語・尊敬語・謙譲語）で一貫して応答します。
 
 2. **In-VPC デュアルコントロールプレーン（入力＆出力ガードレール）**
-   - **入力ガードレール**: 個人情報保護法（APPI）に基づき、7桁の口座番号、顧客氏名（カタカナ・漢字）、店番号、暗証番号、電話番号等の個人情報（PII）をプロンプト構築前に自動マスキング。プロンプトインジェクション攻撃を防御します。
-   - **出力ガードレール**: 検索結果（RAG context）に対するグラウンディングスコアの検証、金融商品取引法・金融庁ガイドラインに基づく個別の投資助言・銘柄推奨の厳格な制限、法的な免責事項の自動付加を行います。
+   - **入力ガードレール**: 個人情報保護法（APPI）に基づき、7桁の口座番号、顧客氏名（カタカナ・漢字）、店番号、暗証番号、電話番号等の個人情報（PII）をプロンプト構築前に自動マスキング。プロンプトインジェクションやジェイルブレイク攻撃を遮断します。
+   - **出力ガードレール**: N-gram意味的含意によるグラウンディングスコア検証（REQ-AI-013）、金融商品取引法（金商法第38条）・金融庁ガイドラインに基づく個別の投資助言・銘柄推奨の厳格な制限、競合他行への言及抑止と自行サービスへの誘導、法的な免責事項の自動付加を行います。
 
-3. **RAGナレッジベース＆コアバンキング合成データ連携**
-   - 楽天銀行のFAQデータベース等を活用した実用的なFAQ自動検索エンジン（RAG）を搭載。
-   - 勘定系コアバンキング（普通預金、定期預金、外貨預金、直近取引明細）の合成口座データ参照に対応。
+3. **リアルタイム W3C Server-Sent Events (SSE) ストリーミング (REQ-IF-015, ADR-0013)**
+   - サブセカンドの高速ストリーミングチャットエンドポイント（`POST /api/chat/stream`）を実装。コントロールプレーンのリアルタイム判定ステータス、タイピングチャンク、および完了テレメトリを順次配信します。
 
-4. **FISC安全対策基準準拠のセキュリティ＆改ざん防止監査**
-   - AWS KMS (AES-256) 暗号化、S3 Object Lock、およびSHA-256ハッシュ署名付きの改ざん防止監査ログをAWS東京リージョン内に保持。
+4. **ゼロトラスト認証＆ステップアップ多要素認証 (REQ-FUN-005, ADR-0014)**
+   - RFC 7519準拠の純Python JWT認証エンジンを実装。KMS動的秘密鍵による署名検証、インメモリブラックリストによるトークン失効、および資金移動（振込・送金）・暗証番号変更・口座解約などの重要操作に対する自動ステップアップMFA誘導カード表示をサポートします。
+
+5. **勘定系コアバンキングの耐障害性＆3ステート・サーキットブレーカー (REQ-FUN-004, ADR-0008)**
+   - FISC安全対策基準に準拠した3ステート（`CLOSED`・`OPEN`・`HALF_OPEN`）サーキットブレーカーを搭載。60秒のインメモリキャッシュTTL、1.5秒の実行タイムアウト、および勘定系障害時の丁寧な日本語縮退案内（フォールバック）を自動実行します。
+
+6. **決定論的 Infrastructure as Code (Terraform) (REQ-OPS-017, ADR-0016)**
+   - マルチAZ 3層VPC（`10.100.0.0/16`）、AWS KMS CMK AES-256、最小特権IAMロール、OpenSearch Serverlessベクトルコレクション（1024次元 Titan v2）、TLS 1.3対応ALB、AWS WAF v2マネージドルール、ECS Fargateクラスターのモジュール構成を完備。
+
+7. **FISC安全対策基準準拠のセキュリティ＆改ざん防止監査**
+   - AWS KMS (AES-256) 暗号化、S3 Object Lock（10年WORM保持）、およびSHA-256ハッシュ署名付きの改ざん防止監査ログをAWS東京リージョン内に保持。
 
 ---
 
@@ -36,10 +44,21 @@ bank-ai-chat/
 ├── README_JA.md                      # 日本語版 README
 ├── data/                             # 合成口座データ & FAQデータセット
 ├── docs/                             # AWSアーキテクチャ・詳細設計書・CI/CD・コスト試算・ADR
-│   └── adr/                          # 建築決定記録 (Architectural Decision Records)
-├── scripts/                          # FAQクローラー & データベース初期化スクリプト
+│   ├── adr/                          # 建築決定記録 (ADR-0001 - ADR-0021)
+│   └── requirements/                 # エンタープライズ要件定義スイート (18仕様書)
+├── scripts/                          # FAQクローラー & グラウンディング評価ベンチマークCLI
+│   └── evaluate_grounding.py         # 100件ゴールデンFAQデータセット評価スクリプト
 ├── src/                              # バックエンド・コントロールプレーン・勘定系・フロントエンド・LLM・RAG
-└── tests/                            # ガードレール・RAG・スキーマ検証用自動テスト
+│   ├── backend/                      # FastAPI, SSEストリーミング, JWT認証＆MFA, RFC 7807
+│   ├── control_plane/                # In-VPC 入出力ガードレール, ブランド保護, AML, 監査ログ
+│   ├── core_banking/                 # 勘定系合成DB & サーキットブレーカー付き耐障害クライアント
+│   ├── frontend/                     # シミュレータUI & 顧客ポータル (SSE & MFAカード対応)
+│   ├── llm/                          # Bedrock Nova Lite & ローカルLLMエンジン
+│   └── rag/                          # 事前インデックス済みTF-IDF / OpenSearchベクトル検索
+├── terraform/                        # 決定論的Terraform IaC構成スイート (REQ-OPS-017)
+│   ├── environments/                 # 環境ルート定義 (dev, prod) & S3リモートステート
+│   └── modules/                      # 再利用可能モジュール (vpc, security, alb, waf, opensearch, ecs)
+└── tests/                            # 60件の自動単体・統合テストスイート
 ```
 
 ---
@@ -90,44 +109,50 @@ Dockerコンテナ上でアプリケーションスタックを構築・起動�
 docker-compose up --build
 ```
 
+---
 
 ### 🌐 Webフロントエンド画面の表示
 サーバー起動後、ブラウザで以下のURLにアクセスします:
-**`http://localhost:8000`**
+- **シミュレータ＆コントロールプレーン監視**: **`http://localhost:8000`**
+- **顧客専用ダイレクトバンキングポータル**: **`http://localhost:8000/user/`**
 
-アクセスすると、以下の機能を備えたインタラクティブなバンキングAIポータル画面が起動します:
-- 丁寧な日本語敬語（丁寧語）で応答するAIチャット
+提供機能:
+- W3C Server-Sent Events (SSE) によるリアルタイムタイピング配信
+- 重要取引操作時の公式インターネットバンキング多要素認証（MFA）誘導カード
 - 顧客プロフィールの切り替えデモ（`山田 太郎`、`佐藤 花子` 等）
-- In-VPC コントロールプレーン リアルタイム監視ダッシュボード（入力/出力ガードレールステータス、グラウンディングスコアメーター、改ざん防止監査ログビューア）
+- In-VPC コントロールプレーン監視ダッシュボード（入出力ガードレール状態、グラウンディング計器、FISC監査ログビューア）
 
-### 🧪 自動テストとコンプライアンス検証の実行 (`uv` 使用)
-コントロールプレーン、RAG検索、LLMプロバイダーの自動テストを `uv` で実行します:
+---
+
+### 🧪 自動テストの実行
+コントロールプレーン、RAGエンジン、サーキットブレーカー、SSEストリーミングをカバーする全60件の自動テストを実行します:
 ```bash
 uv run pytest
-# または unittest discover:
-uv run python3 -m unittest discover -s tests
-# ローカルLLM動作検証スクリプトの実行:
-uv run python3 scripts/setup_local_llm.py
+# または仮想環境のpytest直接実行:
+PYTHONPATH=src ./.venv/bin/pytest tests/ -v
+```
+
+### 📊 グラウンディング評価ベンチマークの実行 (REQ-AI-013)
+100件のゴールデンFAQデータセットに対する自動評価ベンチマークを実行します:
+```bash
+./.venv/bin/python3 scripts/evaluate_grounding.py --limit 100
 ```
 
 ---
 
-## ⚖️ 関連規制・セキュリティ基準
+## ⚖️ 準拠法規制・セキュリティ基準
 
-- **個人情報保護法 (APPI)**: LLMモデルエンドポイントへの生のPII流出を完全遮断。
-- **金融庁 (FSA) AIガイドライン & 金融商品取引法 (FIEA)**: 回答の根拠（Grounding）検証および投資助言行為の禁止。
-- **FISC安全対策基準**: 改ざん防止監査ログおよびKMS暗号化の適用。
-- **グローバル金融基準適合**: **PCI-DSS 4.0**、**GLBA**、**CFPB AI指導原則**、**SR 11-7**、**ISO 42001/AIUC-1**、**NYDFS Part 500** に対するトレサビリティを網羅。[セキュリティ・コンプライアンス要件定義書](docs/requirements/04_security_and_compliance/08_appi_pii_dlp_requirements.md) および [ADR 0009](docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md) を参照。
-- **コンピュート・アーキテクチャ & ストリーミングガバナンス**: AWS ECS FargateとAWS Lambdaの比較評価を実施し、SSEストリーミング応答の無中断提供、API Gatewayの29秒タイムアウト制限回避、コールドスタート排除、および3層VPC FISC安全対策基準への適合を検証。[ADR 0011](docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) および [ADR 0013](docs/adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) を参照。
-- **In-VPC PIIソルト付きトークン化 & ステップアップ認証境界**: 個人情報保護法に基づくPIIトークン化ヴォールト ([ADR 0012](docs/adr/0012-in-vpc-salted-tokenization-vault.md)) および 銀行法に基づくトランザクション型操作のステップアップ認証境界 ([ADR 0014](docs/adr/0014-zero-trust-step-up-authentication-boundary.md))。
-- **ブランド保護・金融犯罪抑止 (AML) & スコープ統制**: 35以上の競合金融機関・Fintechの言及抑制、犯罪収益移転防止法に基づくマネーロンダリング・口座売買等の検知遮断、およびコンピュート不正利用防止 ([ADR 0020](docs/adr/0020-brand-protection-anti-financial-crime-and-scope-guardrails.md))。
-- **ペネトレーションテスト & 敵対的レッドチーム評価**: SSEストリーミングバッファ枯渇、間接的RAGプロンプトインジェクション、およびIn-VPC KMS暗号トークン隔離の網羅的自動検証テストスイート ([ADR 0021](docs/adr/0021-comprehensive-dlp-penetration-testing-and-security-evaluation.md))。
-- **インフラストラクチャコード化 & 本番運用準備**: OpenSearch Serverlessネットワーク隔離・1024次元Titan v2標準化 ([ADR 0015](docs/adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md))、Terraform IaCリモートステート管理 ([ADR 0016](docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md))、最小権限IAMロール設計 ([ADR 0017](docs/adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md))、本番CloudWatch監視アラート目標 ([ADR 0018](docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md))、およびローカルLLMプロバイダー＆開発用フォールバック構成 ([ADR 0019](docs/adr/0019-local-llm-provider-and-fallback-architecture.md))。詳細は [要件定義書体系ポータル (18ドキュメント)](docs/requirements/README.md) を参照。
-
+- **個人情報保護法（APPI）**: 外部LLMエンドポイントへの生PII送信ゼロポリシーを厳格遵守。
+- **金融庁AIガイドライン＆金融商品取引法（金商法第38条）**: 自動グラウンディング検証および個別投資助言の禁止措置。
+- **FISC安全対策基準（第9版）**: 改ざん防止監査証跡の保存、KMS暗号化、および3層VPC分離。
+- **グローバル金融セキュリティ規格**: **PCI-DSS 4.0**, **GLBA**, **CFPB AI Guidance**, **SR 11-7**, **ISO 42001/AIUC-1**, **NYDFS Part 500** への完全なトレーサビリティを確保。詳細は [セキュリティ・コンプライアンス要件定義書](docs/requirements/04_security_and_compliance/08_appi_pii_dlp_requirements.md) および [ADR 0009](docs/adr/0009-dlp-security-guardrails-and-compliance-framework.md) を参照。
+- **コンピュートアーキテクチャ＆ストリーミングガバナンス**: AWS ECS Fargate による非途絶SSE応答ストリーミング、29秒タイムアウト回避、コールドスタートゼロ、およびFISC準拠3層VPC統合。詳細は [ADR 0011](docs/adr/0011-compute-architecture-re-evaluation-ecs-vs-lambda.md) および [ADR 0013](docs/adr/0013-sse-streaming-and-guardrail-buffer-architecture.md) を参照。
+- **In-VPC Salted PII トークン化＆ステップアップ認証**: APPI準拠のPIIボールティング ([ADR 0012](docs/adr/0012-in-vpc-salted-tokenization-vault.md)) および銀行法第13条の2に基づく法的取引境界の確立 ([ADR 0014](docs/adr/0014-zero-trust-step-up-authentication-boundary.md))。
+- **ブランド防衛・AML（マネロン防止）・スコープ制御**: 35以上の国内競合金融機関に対する言及抑止、犯罪収益移転防止法準拠のAML検知、およびプロンプトインジェクション防御 ([ADR 0020](docs/adr/0020-brand-protection-anti-financial-crime-and-scope-guardrails.md))。
+- **決定論的インフラ構成と本番運用性**: OpenSearch Serverless ネットワーク分離ポリシー＆1024次元 Titan v2 ベクトル埋め込み ([ADR 0015](docs/adr/0015-opensearch-serverless-network-isolation-and-vector-dimension-standard.md))、決定論的Terraform IaCリモートステート管理 ([ADR 0016](docs/adr/0016-deterministic-terraform-iac-architecture-and-remote-state-management.md))、エンタープライズ最小特権IAMロール定義 ([ADR 0017](docs/adr/0017-enterprise-iam-least-privilege-access-and-kms-key-policy-topology.md))、および本番CloudWatchメトリクス・アラーム構成 ([ADR 0018](docs/adr/0018-production-observability-cloudwatch-alarms-and-security-telemetry-targets.md))。全18件の要件仕様書は [エンタープライズ要件定義スイート一覧](docs/requirements/README.md) を参照。
 
 ---
 
-## 📝 ドキュメント運用方針 (Documentation Policy)
+## 📝 ドキュメント保守ポリシー
 
-[`GEMINI.md`](GEMINI.md) の規定に基づき、**英語 (`README.md`) と日本語 (`README_JA.md`) の2言語によるドキュメント維持管理は README ファイル限定で適用**されます。その他の内部ドキュメントおよびADRは規定の標準言語で管理されます。
-
+[`GEMINI.md`](GEMINI.md) に規定されている通り、**日英2言語（English / 日本語）によるドキュメントの同期保守は README ファイル（`README.md` および `README_JA.md`）に限定**されています。その他の内部設計書や ADR 群はそれぞれの指定言語にて管理されます。
